@@ -1,0 +1,4 @@
+#!/bin/sh
+# Indexing is best-effort and must not invalidate a completed commit.
+TASK_REPO=$(git rev-parse --show-toplevel) || exit 0
+python3 "$TASK_REPO/scripts/ensure_codebase_memory.py" || true

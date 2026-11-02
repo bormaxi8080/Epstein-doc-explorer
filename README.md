@@ -1,3 +1,20 @@
+# Epstein Document Explorer — DOJ ingestion fork
+
+This fork preserves the upstream Explorer and adds an independent, evidence-aware
+PW-010 ingestion pipeline. Current fork version: **1.1.0**.
+
+- [Ingestion setup, commands, contracts and current limits](docs/ingestion.md)
+- [Self-hosting a reviewed bundle](docs/self-hosting.md)
+- [Codebase Memory MCP setup](docs/codebase-memory-mcp.md)
+- [Project rules](AGENTS.md), [version policy](VERSIONING.md), [changelog](CHANGELOG.md)
+
+The existing corpus remains the upstream baseline. Downloaded originals, model
+responses and ingestion state live outside this checkout. No live downloads,
+model requests or deployment happen during installation. The new pipeline is
+preliminary; OCR, evidence UI and large-corpus API work remain planned.
+
+---
+
 # Epstein Document Network Explorer
 
 > **Note:** Additional documents are currently being processed and added to the network. The analysis pipeline is actively ingesting newly released documents from the House Oversight Committee.

@@ -1,0 +1,12 @@
+version: 1
+name: fcc
+slug: fcc
+protocol: http
+port: 4010
+description: Local synthetic Messages stand-in; never calls a provider.
+origin: fcc.invalid
+interceptRequests: true
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true

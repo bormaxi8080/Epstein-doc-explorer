@@ -9,6 +9,7 @@ import path from 'path';
 const app = express();
 const PORT = process.env.PORT || 3001;
 const DB_PATH = process.env.DB_PATH || 'document_analysis.db';
+const DB_READONLY = process.env.DB_READONLY !== 'false';
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS && process.env.ALLOWED_ORIGINS.trim())
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:5173', 'http://localhost:3000', 'https://epsteinvisualizer.com', 'https://www.epsteinvisualizer.com'];
@@ -70,8 +71,8 @@ app.use((req, res, next) => {
 // Initialize database with error handling
 let db: Database.Database;
 try {
-  db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL'); // Enable WAL mode for better concurrency
+  db = new Database(DB_PATH, { readonly: DB_READONLY, fileMustExist: true });
+  if (!DB_READONLY) db.pragma('journal_mode = WAL');
   console.log(`✓ Database initialized: ${DB_PATH}`);
 } catch (error) {
   console.error('Failed to initialize database:', error);
@@ -81,7 +82,7 @@ try {
 // Load tag clusters with error handling
 let tagClusters: any[] = [];
 try {
-  const clustersPath = path.join(process.cwd(), 'tag_clusters.json');
+  const clustersPath = process.env.TAG_CLUSTERS_PATH || path.join(process.cwd(), 'tag_clusters.json');
   tagClusters = JSON.parse(fs.readFileSync(clustersPath, 'utf-8'));
   console.log(`✓ Loaded ${tagClusters.length} tag clusters`);
 } catch (error) {

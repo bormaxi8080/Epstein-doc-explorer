@@ -1,0 +1,8 @@
+simulation: explorer-fcc-local
+routing: path
+mocks:
+  - name: fcc
+    routeKey: fcc
+    origin:
+      - fcc.invalid
+    path: postman/mocks/fcc/config.yaml

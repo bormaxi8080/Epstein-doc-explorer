@@ -1,0 +1,11 @@
+.git
+.venv
+**/__pycache__
+**/node_modules
+data
+document_analysis.db*
+*.sqlite3*
+*.log
+.env*
+network-ui/dist
+.codebase-memory

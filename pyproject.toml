@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "epstein-explorer-ingestion"
+version = "1.1.0"
+description = "Provenance-preserving DOJ ingestion for Epstein Document Explorer"
+requires-python = ">=3.10"
+dependencies = ["ijson>=3.3,<4", "jsonschema>=4.23,<5", "pypdf>=5,<7", "certifi>=2024.8.30"]
+
+[project.scripts]
+explorer-ingest = "explorer_ingest.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["ingestion"]
+include = ["explorer_ingest*"]
+
+[tool.setuptools.package-data]
+explorer_ingest = ["*.json"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B"]

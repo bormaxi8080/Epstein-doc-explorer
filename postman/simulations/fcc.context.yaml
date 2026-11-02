@@ -1,0 +1,30 @@
+purpose:
+  stands_in_for: FCC Anthropic-compatible non-streaming Messages endpoint.
+  unblocks: Local ingestion caller checks without sending documents to NVIDIA.
+assumptions:
+  - id: simulated-caller-behavior
+    status: supported
+    claim: The ingestion caller rejects invalid evidence, truncation, 500 and timeout results; retries 429 once in the configured test and exports a successful reviewed result.
+    reason: Real urllib requests and resulting SQLite state were checked against the local stand-in, with matching simulation request events.
+    verification: On 2026-11-02, 17 tests passed with Postman 1.73.0. A fresh run recorded 9 Messages requests (5 status 200, 3 status 500, 1 status 429); failed analyses had no successful cache entries. This establishes caller behavior against the stand-in, not installed FCC/NVIDIA compatibility.
+    source: ingestion/tests/test_pipeline.py; postman/mocks/fcc/default.js; ingestion/explorer_ingest/provider.py
+    updated_at: '2026-11-02'
+  - id: messages-max-tokens-type
+    status: supported
+    claim: The Messages request uses an integer max_tokens value.
+    reason: The official SDK type and API reference supersede Orbit's brief, whose example described max_tokens as a string.
+    verification: On 2026-11-02, inspected the official Anthropic Ruby SDK required max_tokens Integer declaration and the API reference; the local stand-in checked the caller's positive token limit.
+    source: https://github.com/anthropics/anthropic-sdk-ruby/blob/main/lib/anthropic/models/message_create_params.rb
+    updated_at: '2026-11-02'
+  - id: fcc-messages-compatibility
+    status: unknown
+    claim: The user's installed FCC accepts the implemented Messages subset.
+    reason: The local stand-in models the public Messages shape, not the installed proxy.
+    verification: Public FCC README inspected on 2026-11-02; installed FCC has not been called.
+    source: ingestion/explorer_ingest/provider.py; https://github.com/Alishahryar1/free-claude-code
+    updated_at: '2026-11-02'
+fingerprints:
+  - id: initial-fork
+    date: '2026-11-02'
+    commit: initial ingestion implementation over upstream; dirty tree during checks
+    cli: Postman 1.73.0

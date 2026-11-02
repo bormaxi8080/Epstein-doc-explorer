@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "api_server.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "network-ui"
+  ]
+}

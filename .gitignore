@@ -65,3 +65,21 @@ coverage/
 tmp/
 temp/
 *.tmp
+
+# Fork ingestion: generated/private data stays outside Git.
+.venv/
+__pycache__/
+*.egg-info/
+*.sqlite3*
+*.db-wal
+*.db-shm
+.codebase-memory/
+.postman/
+postman/.dependencies/
+*.ndjson
+.env
+.env.*
+!.env.example
+.ruff_cache/
+build/
+dist/

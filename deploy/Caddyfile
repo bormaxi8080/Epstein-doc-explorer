@@ -1,0 +1,4 @@
+{$EXPLORER_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy explorer:3001
+}
