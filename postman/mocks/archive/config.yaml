@@ -1,0 +1,12 @@
+version: 1
+name: archive
+slug: archive
+protocol: http
+port: 4011
+description: Synthetic PDF/Range fixture; no DOJ connection.
+origin: archive.invalid
+interceptRequests: true
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true

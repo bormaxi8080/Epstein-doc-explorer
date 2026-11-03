@@ -4,6 +4,19 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ## Unreleased
 
+### Added
+
+- Standalone `scripts/download_archive.py` / `explorer-download` commands for
+  offline planning, explicit acquisition, offline verification and quarantine.
+- Independent JSON, optional read-only evidence DB and external-disk destination;
+  pinned PW-010 v1/v2 schemas, streaming registry/hierarchy/count validation.
+- URL-based originals, complete logical placement references, resumable strong-ETag
+  Range transfers with prefix hashes, receipts and publication recovery.
+- Per-file/disk/retry budgets, HTML rejection, PDF/ZIP/text checks, media-check
+  distinctions, offline SHA-256 audits and a downstream verified JSONL manifest.
+- Synthetic regression fixtures and local Postman archive simulation; no real
+  archive fetch or OCR/model processing was run.
+
 ## 1.1.0 - 2026-11-02
 
 ### Added

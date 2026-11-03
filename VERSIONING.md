@@ -16,7 +16,8 @@ independent upstream package version until a UI release changes it.
   version authorities together. Do not rewrite upstream history.
 
 Data versions are independent: PW-010 schema v1/v2, extraction version,
-analysis schema version, prompt version, FCC routing revision, bundle format,
+analysis schema version, prompt version, FCC routing revision, archive layout/receipt
+format (currently 1), bundle format,
 and cluster-file SHA-256. Changes to any analysis input invalidate its cache.
 Increment `FCC_ROUTING_REVISION` whenever FCC routing or fallback changes.
 

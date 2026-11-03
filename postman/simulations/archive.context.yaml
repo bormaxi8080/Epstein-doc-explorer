@@ -1,0 +1,27 @@
+purpose:
+  stands_in_for: A static original-document HTTP source with optional byte ranges.
+  unblocks: Standalone archive downloader verification without any DOJ traffic.
+assumptions:
+  - id: local-caller-verification
+    status: supported
+    claim: The standalone downloader preserves inputs and placements, resumes validated partials, rejects inconsistent responses and publishes an offline-audited manifest against local fixtures.
+    reason: Real HTTP transfers and persistent SQLite/filesystem effects were asserted; the Postman log confirms the CLI reached the stand-in.
+    verification: On 2026-11-03, 45 tests passed (28 downloader and 17 existing ingestion tests). A separate script subprocess completed plan/fetch/verify against a synthetic PDF served by Postman. Loopback tests covered disconnect/Range/If-Range, corrupt partials, 200 fallback, 429/500, bad ranges, HTML gates, source hashes, CRC, disk loss, quarantine and publication recovery. These results do not establish real DOJ behavior or final dump scale.
+    source: ingestion/tests/test_archive.py; scripts/download_archive.py; postman/mocks/archive/default.js
+    updated_at: '2026-11-03'
+  - id: actual-source-supports-resume
+    status: unknown
+    claim: A real source provides a strong ETag and honors If-Range with correct Content-Range.
+    reason: This is explicitly optional; the caller restarts if the source returns 200 or no strong validator.
+    verification: The actual DOJ archive has not been requested. A local stand-in models only the contract under test.
+    source: ingestion/explorer_ingest/archive_transfer.py; postman/mocks/archive/default.js
+    updated_at: '2026-11-02'
+fingerprints:
+  - id: standalone-downloader
+    date: '2026-11-02'
+    commit: initial downloader changes over 87e98135; dirty tree during verification
+    cli: Postman 1.73.0
+  - id: final-verification-20261103
+    date: '2026-11-03'
+    commit: downloader changes over 87e98135; dirty tree during verification
+    cli: Postman 1.73.0

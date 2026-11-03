@@ -5,6 +5,14 @@ pipeline. PW-010 currently inventories DOJ links and metadata; it does not fetch
 archive payloads. The sibling Oriol project is an input producer, not a runtime
 dependency. No action runs implicitly after installation.
 
+## Bulk archive acquisition
+
+Use the independent [archive downloader](archive-downloader.md) for the final
+PW-010 corpus. It has separate JSON/optional DB/destination paths, persistent
+resume, source hierarchy and offline audit. The small `explorer-ingest download`
+command below remains a backwards-compatible pilot helper. Archive JSONL-to-OCR
+adoption is a future adapter; no command automatically starts analysis.
+
 ## Implemented stages
 
 1. Stream PW-010 v1/v2 `assets` with `ijson`. Check certification flags, issue and

@@ -16,6 +16,16 @@ import Oriol runtime modules or edit sibling projects as part of this pipeline.
 - Refresh after commits using `scripts/ensure_codebase_memory.py`; see
   `docs/codebase-memory-mcp.md`. Never claim indexed coverage without checking it.
 
+## Archive acquisition
+
+- Use `scripts/download_archive.py` for the full PW-010 mirror; read
+  `docs/archive-downloader.md`. Input JSON, optional evidence DB, and destination
+  are separate paths. JSON is authoritative; input DBs are read-only evidence.
+- Never run `fetch` against real sources unless explicitly authorized. Planning
+  and verification are offline. Reject incomplete sources by default.
+- Preserve originals and all placements; never silently overwrite a suspect
+  original. Require a fresh full audit before handing files to OCR/analysis.
+
 ## Data and analysis
 
 - Keep original upstream data and downloaded originals unchanged. Never run

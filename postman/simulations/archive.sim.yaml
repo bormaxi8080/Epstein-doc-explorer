@@ -1,0 +1,8 @@
+simulation: explorer-archive-local
+routing: path
+mocks:
+  - name: archive
+    routeKey: archive
+    origin:
+      - archive.invalid
+    path: postman/mocks/archive/config.yaml

@@ -11,6 +11,7 @@ dependencies = ["ijson>=3.3,<4", "jsonschema>=4.23,<5", "pypdf>=5,<7", "certifi>
 
 [project.scripts]
 explorer-ingest = "explorer_ingest.cli:main"
+explorer-download = "explorer_ingest.archive_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["ingestion"]
