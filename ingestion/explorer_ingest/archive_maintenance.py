@@ -9,10 +9,40 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from .archive_catalog import CONTROL, atomic_json, plan, sync_directory
+from .archive_catalog import CONTROL, StorageUnavailable, atomic_json, plan, sync_directory
 from .archive_contracts import read_artifact
 from .archive_transfer import artifact_paths, verify
 from .state import digest_file
+
+
+def directory_guard(directory):
+    requested = Path(directory).absolute()
+    root = requested.resolve(strict=True)
+    identity = root.stat()
+    expected = identity.st_dev, identity.st_ino
+
+    def check():
+        try:
+            current = requested.resolve(strict=True)
+            stat = current.stat()
+            if current != root or (stat.st_dev, stat.st_ino) != expected:
+                raise StorageUnavailable("Metadata destination filesystem identity changed")
+            if root.parts[:2] == ("/", "Volumes") and not os.path.ismount(Path(*root.parts[:3])):
+                raise StorageUnavailable("Metadata destination volume is not mounted")
+        except OSError as exc:
+            raise StorageUnavailable("Metadata destination is unavailable") from exc
+
+    check()
+    return check
+
+
+def sync_tree(directory):
+    # Make every copied file and directory durable before publishing its parent.
+    for root, _, files in os.walk(directory, topdown=False):
+        for name in files:
+            with (Path(root) / name).open("rb") as stream:
+                os.fsync(stream.fileno())
+        sync_directory(root)
 
 
 def backup_path(root, relative):
@@ -40,6 +70,7 @@ def backup(archive, output, reserve_bytes=1024**3):
         raise ValueError("Backup output must not exist")
     if not output.parent.is_dir():
         raise ValueError("Backup parent must already exist")
+    check_destination = directory_guard(output.parent)
     if archive.root == output.resolve() or archive.root in output.resolve().parents:
         raise ValueError("Backup must be outside the archive")
     if (
@@ -49,6 +80,7 @@ def backup(archive, output, reserve_bytes=1024**3):
     ):
         raise ValueError("Backup filesystem reserve is unavailable")
     with tempfile.TemporaryDirectory(prefix=".pw010-backup-", dir=output.parent) as directory:
+        check_destination()
         stage = Path(directory) / "metadata"
         stage.mkdir()
         connection = sqlite3.connect(stage / "archive.sqlite3")
@@ -62,6 +94,7 @@ def backup(archive, output, reserve_bytes=1024**3):
             def record(relative):
                 nonlocal count
                 archive.check()
+                check_destination()
                 if shutil.disk_usage(output.parent).free < reserve_bytes:
                     raise ValueError("Backup filesystem reserve exhausted")
                 destination = backup_path(stage, relative)
@@ -105,7 +138,10 @@ def backup(archive, output, reserve_bytes=1024**3):
             "contains_originals": False,
         }
         atomic_json(stage / "backup.json", header)
-        sync_directory(stage)
+        check_destination()
+        sync_tree(stage)
+        if output.exists() or output.is_symlink():
+            raise ValueError("Backup output appeared during snapshot")
         stage.rename(output)
         sync_directory(output.parent)
     return header
@@ -160,6 +196,7 @@ def restore(destination, source, reserve_bytes=1024**3):
     if not root.is_absolute() or not root.is_dir():
         raise ValueError("Restore destination must be an existing absolute directory")
     root = root.resolve()
+    check_destination = directory_guard(root)
     control = root / CONTROL
     if control.exists() or control.is_symlink():
         raise ValueError("Restore never replaces existing archive metadata")
@@ -171,10 +208,12 @@ def restore(destination, source, reserve_bytes=1024**3):
         raise ValueError("Restore filesystem reserve is unavailable")
     # Validate and invalidate the copied ledger before publishing control metadata.
     with tempfile.TemporaryDirectory(prefix=".pw010-restore-", dir=root) as directory:
+        check_destination()
         stage = Path(directory) / CONTROL
         stage.mkdir()
         with (source / "files.jsonl").open() as stream:
             for line in stream:
+                check_destination()
                 item = json.loads(line)
                 original = backup_path(source, item["path"])
                 target = backup_path(stage, item["path"])
@@ -213,11 +252,8 @@ def restore(destination, source, reserve_bytes=1024**3):
                         receipt.rename(history / receipt.name)
         finally:
             db.close()
-        for path in stage.rglob("*"):
-            if path.is_file():
-                with path.open("rb") as stream:
-                    os.fsync(stream.fileno())
-        sync_directory(stage)
+        check_destination()
+        sync_tree(stage)
         if control.exists() or control.is_symlink():
             raise ValueError("Archive metadata appeared during restore")
         stage.rename(control)

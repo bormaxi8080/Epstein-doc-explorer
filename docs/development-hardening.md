@@ -103,7 +103,9 @@ inventory, identity and canonical receipts with a versioned checksummed JSONL
 file list. It excludes originals, partial bytes, credentials and derived OCR.
 Keep a separate backup of original payloads; a metadata backup cannot recreate
 missing original bytes without another explicit `fetch`. Output must be a new
-external directory. The configured free-space reserve is checked while copying.
+external directory. The configured free-space reserve and destination filesystem identity are
+checked while copying. Copied files and nested directories are fsynced before
+publication; loss/replacement of the metadata disk stops the operation.
 
 `restore` verifies every backup member before publishing metadata and refuses
 any existing control directory. It preserves archive UUID, resets statuses and
@@ -127,8 +129,8 @@ Only receipted, matching originals are recoverable. The existing identity marker
 is retained; a missing marker creates a new UUID, requiring a new derived root.
 Rebuild never guesses hashes or trusts matching sizes. On a failure, provisional
 metadata and original bytes remain for inspection; use `verify`, quarantine and
-explicit fetch to proceed rather than replacing the ledger again. Six focused
-operation tests passed against temporary synthetic archives.
+explicit fetch to proceed rather than replacing the ledger again. Seven focused
+operation tests passed, including destination identity loss, against temporary synthetic archives.
 
 ## Measured scale
 

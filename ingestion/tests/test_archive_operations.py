@@ -8,7 +8,7 @@ from unittest.mock import patch
 import test_archive as fixtures
 from explorer_ingest.archive_catalog import CONTROL, Archive, StorageUnavailable, report
 from explorer_ingest.archive_cli import main
-from explorer_ingest.archive_maintenance import backup, rebuild, restore
+from explorer_ingest.archive_maintenance import backup, directory_guard, rebuild, restore
 from explorer_ingest.archive_observer import ArchiveView, doctor, watch
 from explorer_ingest.archive_transfer import fetch, verify
 from explorer_ingest.state import digest_file
@@ -101,6 +101,19 @@ class OperationTests(fixtures.HTTPFixture):
         with self.assertRaisesRegex(ValueError, "never replaces"):
             Archive(self.root, create=True, recover=True)
         self.archive = Archive(self.root)
+
+    def test_metadata_destination_identity_loss_never_creates_fallback(self):
+        destination = self.base / "backup-disk"
+        destination.mkdir()
+        check = directory_guard(destination)
+        destination.rename(self.base / "removed-disk")
+        with self.assertRaises(StorageUnavailable):
+            check()
+        self.assertFalse(destination.exists())
+        destination.mkdir()
+        with self.assertRaises(StorageUnavailable):
+            check()
+        self.assertEqual(list(destination.iterdir()), [])
 
     def test_unsafe_backup_member_is_rejected(self):
         saved = self.base / "backup"
