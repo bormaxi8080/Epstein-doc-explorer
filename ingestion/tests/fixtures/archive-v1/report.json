@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source_inventory_complete": true,
+  "total": 1,
+  "expected_bytes": 10,
+  "unknown_sizes": 0,
+  "downloaded_bytes": 10,
+  "statuses": {
+    "downloaded": 1
+  },
+  "download_complete": true,
+  "last_full_audit": null,
+  "source_checksums_count": 0,
+  "complete_at_last_audit": false
+}

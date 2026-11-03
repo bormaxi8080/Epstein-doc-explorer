@@ -19,7 +19,15 @@ from urllib.parse import urlsplit
 
 from pypdf.errors import PyPdfError
 
-from .archive_catalog import CONTROL, StorageUnavailable, atomic_json, report, sync_directory
+from .archive_catalog import (
+    CONTROL,
+    StorageUnavailable,
+    artifact_json,
+    atomic_json,
+    report,
+    sync_directory,
+)
+from .archive_contracts import read_artifact, validate_artifact
 from .state import digest_file
 from .transport import tls_context
 
@@ -210,8 +218,9 @@ def mark_downloaded(archive, row, receipt, receipt_path, options):
         storage_check(archive, options)
         path = archive.path(placement["relative_path"])
         archive.make_parent(path)
-        atomic_json(
+        artifact_json(
             path,
+            "reference",
             {
                 "format_version": 1,
                 "asset_id": row["id"],
@@ -239,7 +248,7 @@ def recover_publication(archive, row, options):
     partial, sidecar, receipt_path = artifact_paths(archive, row)
     if not receipt_path.exists():
         return False
-    receipt = json.loads(receipt_path.read_text())
+    receipt = read_artifact(receipt_path, "receipt")
     if receipt.get("asset_id") != row["id"] or receipt.get("source_sha256") != archive.meta(
         "source_sha256"
     ):
@@ -270,7 +279,7 @@ def receive(archive, row, options):
     expected = row["expected_bytes"]
     if expected is not None and expected > options.max_file_bytes:
         raise IntegrityError("File exceeds configured max_file_bytes")
-    previous = json.loads(sidecar.read_text()) if sidecar.exists() else {}
+    previous = read_artifact(sidecar, "partial") if sidecar.exists() else {}
     offset = partial.stat().st_size if partial.exists() else 0
     etag = previous.get("etag", "") or ""
     if (
@@ -368,7 +377,7 @@ def receive(archive, row, options):
             "checkpoint_bytes": offset,
             "checkpoint_sha256": hasher.hexdigest(),
         }
-        atomic_json(sidecar, partial_metadata)
+        artifact_json(sidecar, "partial", partial_metadata)
         received, last_progress = offset, time.monotonic()
         with partial.open("ab" if offset else "wb") as output:
             try:
@@ -389,9 +398,10 @@ def receive(archive, row, options):
                         partial_metadata.update(
                             checkpoint_bytes=received, checkpoint_sha256=hasher.hexdigest()
                         )
-                        atomic_json(sidecar, partial_metadata)
-                        atomic_json(
+                        artifact_json(sidecar, "partial", partial_metadata)
+                        artifact_json(
                             archive.path(f"{CONTROL}/progress.json"),
+                            "progress",
                             {
                                 "asset_id": row["id"],
                                 "bytes": received,
@@ -406,7 +416,7 @@ def receive(archive, row, options):
                 partial_metadata.update(
                     checkpoint_bytes=received, checkpoint_sha256=hasher.hexdigest()
                 )
-                atomic_json(sidecar, partial_metadata)
+                artifact_json(sidecar, "partial", partial_metadata)
         if target is not None and received != target:
             raise http.client.IncompleteRead(b"", target - received)
         content = validate_content(
@@ -435,7 +445,7 @@ def receive(archive, row, options):
         }
     archive.check()
     # Receipt first: a crash before/after rename is reconciled without a second GET.
-    atomic_json(receipt_path, receipt)
+    artifact_json(receipt_path, "receipt", receipt)
     archive.make_parent(destination)
     partial.replace(destination)
     sync_directory(destination.parent)
@@ -540,7 +550,7 @@ def verify(archive, options, limit=0):
             try:
                 partial, sidecar, receipt_path = artifact_paths(archive, row)
                 recover_publication(archive, row, options)
-                receipt = json.loads(receipt_path.read_text())
+                receipt = read_artifact(receipt_path, "receipt")
                 path = archive.path(row["relative_path"])
                 if (
                     path.stat().st_size != receipt["actual_bytes"]
@@ -562,7 +572,7 @@ def verify(archive, options, limit=0):
                 for placement in archive.db.execute(
                     "SELECT * FROM placements WHERE asset_id=?", (row["id"],)
                 ):
-                    reference = json.loads(archive.path(placement["relative_path"]).read_text())
+                    reference = read_artifact(archive.path(placement["relative_path"]), "reference")
                     if (
                         reference["sha256"] != receipt["sha256"]
                         or reference["original"] != row["relative_path"]
@@ -571,14 +581,18 @@ def verify(archive, options, limit=0):
                 mark_downloaded(archive, row, receipt, receipt_path, options)
                 output.write(
                     json.dumps(
-                        {
-                            "asset_id": row["id"],
-                            "relative_path": row["relative_path"],
-                            "sha256": receipt["sha256"],
-                            "bytes": receipt["actual_bytes"],
-                            "metadata": json.loads(row["metadata"]),
-                            "receipt": str(receipt_path.relative_to(archive.root)),
-                        }
+                        validate_artifact(
+                            "manifest-row",
+                            {
+                                "format_version": 1,
+                                "asset_id": row["id"],
+                                "relative_path": row["relative_path"],
+                                "sha256": receipt["sha256"],
+                                "bytes": receipt["actual_bytes"],
+                                "metadata": json.loads(row["metadata"]),
+                                "receipt": str(receipt_path.relative_to(archive.root)),
+                            },
+                        )
                     )
                     + "\n"
                 )

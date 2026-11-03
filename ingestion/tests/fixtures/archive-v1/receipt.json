@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "asset_id": "synthetic",
+  "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "relative_path": "archive-files/document.pdf",
+  "source_url": "https://fixture.invalid/document.pdf",
+  "requested_url": "https://fixture.invalid/document.pdf",
+  "final_url": "https://fixture.invalid/document.pdf",
+  "expected_bytes": 10,
+  "actual_bytes": 10,
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "etag": "\"fixture-v1\"",
+  "last_modified": null,
+  "mime_type": "application/pdf",
+  "downloaded_at": "2026-11-03T00:00:00+00:00",
+  "content_validation": {
+    "method": "pdf_structure",
+    "fully_checked": true,
+    "pages": 1
+  },
+  "source_checksum_verified": false
+}

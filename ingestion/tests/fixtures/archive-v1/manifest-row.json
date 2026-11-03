@@ -1,0 +1,8 @@
+{
+  "asset_id": "synthetic",
+  "relative_path": "archive-files/document.pdf",
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "bytes": 10,
+  "metadata": {},
+  "receipt": ".pw010-download/receipts/synthetic.json"
+}

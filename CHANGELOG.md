@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Versioned archive artifact schemas, v1 compatibility fixtures, safe-path and
+  semantic completeness checks at publication/consumption boundaries.
+
 - Standalone `scripts/download_archive.py` / `explorer-download` commands for
   offline planning, explicit acquisition, offline verification and quarantine.
 - Independent JSON, optional read-only evidence DB and external-disk destination;

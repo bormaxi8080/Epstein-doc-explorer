@@ -1,0 +1,401 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:epstein-explorer:archive-artifacts:1",
+  "$defs": {
+    "receipt": {
+      "type": "object",
+      "required": [
+        "format_version",
+        "asset_id",
+        "source_sha256",
+        "relative_path",
+        "source_url",
+        "requested_url",
+        "final_url",
+        "expected_bytes",
+        "actual_bytes",
+        "sha256",
+        "etag",
+        "last_modified",
+        "mime_type",
+        "downloaded_at",
+        "content_validation",
+        "source_checksum_verified"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "asset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "relative_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requested_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "actual_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "etag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_modified": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mime_type": {
+          "type": "string"
+        },
+        "downloaded_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "content_validation": {
+          "$ref": "#/$defs/content_validation"
+        },
+        "source_checksum_verified": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "manifest-row": {
+      "type": "object",
+      "required": [
+        "asset_id",
+        "relative_path",
+        "sha256",
+        "bytes",
+        "metadata",
+        "receipt"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "asset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relative_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "receipt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "audit": {
+      "type": "object",
+      "required": [
+        "at",
+        "passed",
+        "checked",
+        "failures",
+        "all_content_fully_checked",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "checked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "all_content_fully_checked": {
+          "type": "boolean"
+        },
+        "manifest_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "report": {
+      "type": "object",
+      "required": [
+        "format_version",
+        "source_sha256",
+        "source_inventory_complete",
+        "total",
+        "expected_bytes",
+        "unknown_sizes",
+        "downloaded_bytes",
+        "statuses",
+        "download_complete",
+        "last_full_audit",
+        "source_checksums_count",
+        "complete_at_last_audit"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "source_inventory_complete": {
+          "type": "boolean"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknown_sizes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "downloaded_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "statuses": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "download_complete": {
+          "type": "boolean"
+        },
+        "last_full_audit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/audit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_checksums_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complete_at_last_audit": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "reference": {
+      "type": "object",
+      "required": [
+        "format_version",
+        "asset_id",
+        "node_id",
+        "source_sha256",
+        "original",
+        "sha256",
+        "receipt"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "asset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "original": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "receipt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "partial": {
+      "type": "object",
+      "required": [
+        "asset_id",
+        "source_sha256",
+        "checkpoint_bytes",
+        "checkpoint_sha256"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "asset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "checkpoint_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "checkpoint_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "etag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "format_version",
+        "uuid"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "uuid": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "progress": {
+      "type": "object",
+      "required": [
+        "phase",
+        "at"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "phase": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "asset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "content_validation": {
+      "type": "object",
+      "required": [
+        "method",
+        "fully_checked"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fully_checked": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

@@ -15,6 +15,7 @@ from urllib.parse import quote, unquote, urlsplit
 import ijson
 from jsonschema import Draft202012Validator
 
+from .archive_contracts import read_artifact, validate_artifact
 from .state import atomic_json as state_atomic_json
 from .state import digest_file
 
@@ -37,6 +38,11 @@ def sync_directory(path):
 def atomic_json(path, value):
     state_atomic_json(path, value)
     sync_directory(Path(path).parent)
+
+
+def artifact_json(path, kind, value):
+    validate_artifact(kind, value)
+    atomic_json(path, value)
 
 
 def component(value):
@@ -100,8 +106,8 @@ class Archive:
             if not marker.exists():
                 if not create or (self.control / "archive.sqlite3").exists():
                     raise ValueError("Destination identity is missing")
-                atomic_json(marker, {"format_version": 1, "uuid": uuid.uuid4().hex})
-            self.marker = json.loads(marker.read_text())
+                artifact_json(marker, "identity", {"format_version": 1, "uuid": uuid.uuid4().hex})
+            self.marker = read_artifact(marker, "identity")
             if self.marker.get("format_version") != 1:
                 raise ValueError("Unsupported archive layout")
             database = self.path(f"{CONTROL}/archive.sqlite3")
@@ -464,7 +470,7 @@ def report(archive):
     archive.ready()
     totals = dict(
         archive.db.execute(
-            "SELECT COUNT(*) total,COALESCE(SUM(expected_bytes),0) expected_bytes, SUM(expected_bytes IS NULL) unknown_sizes, COALESCE(SUM(CASE WHEN status='downloaded' THEN actual_bytes ELSE 0 END),0) downloaded_bytes FROM assets"
+            "SELECT COUNT(*) total,COALESCE(SUM(expected_bytes),0) expected_bytes, COALESCE(SUM(expected_bytes IS NULL),0) unknown_sizes, COALESCE(SUM(CASE WHEN status='downloaded' THEN actual_bytes ELSE 0 END),0) downloaded_bytes FROM assets"
         ).fetchone()
     )
     statuses = {
@@ -486,4 +492,4 @@ def report(archive):
     result["complete_at_last_audit"] = bool(
         result["source_inventory_complete"] and result["download_complete"] and audit.get("passed")
     )
-    return result
+    return validate_artifact("report", result)

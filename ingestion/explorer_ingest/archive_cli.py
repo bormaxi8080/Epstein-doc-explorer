@@ -9,7 +9,7 @@ from pathlib import Path
 from ijson.common import JSONError
 from jsonschema import ValidationError
 
-from .archive_catalog import CONTROL, Archive, StorageUnavailable, atomic_json, plan, report
+from .archive_catalog import CONTROL, Archive, StorageUnavailable, artifact_json, plan, report
 from .archive_transfer import Options, fetch, quarantine, storage_check, verify
 
 
@@ -78,7 +78,11 @@ def main(argv=None):
         else:
             result = report(archive)
         archive.check()
-        atomic_json(archive.path(f"{CONTROL}/report.json"), result)
+        artifact_json(
+            archive.path(f"{CONTROL}/report.json"),
+            "report",
+            report(archive) if args.command == "quarantine" else result,
+        )
         print(json.dumps(result, indent=2))
         if args.command in ("fetch", "verify"):
             if result["statuses"].get("failed"):

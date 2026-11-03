@@ -3,6 +3,7 @@
 This fork preserves the upstream Explorer and adds an independent, evidence-aware
 PW-010 ingestion pipeline. Current fork version: **1.1.0**.
 
+- [Offline hardening and development](docs/development-hardening.md)
 - [Standalone archive downloader: independent dump/DB/destination paths](docs/archive-downloader.md)
 - [Ingestion setup, commands, contracts and current limits](docs/ingestion.md)
 - [Self-hosting a reviewed bundle](docs/self-hosting.md)
