@@ -65,6 +65,12 @@ class Store:
             doc_id TEXT NOT NULL REFERENCES documents(doc_id),
             asset_id TEXT NOT NULL REFERENCES assets(id), member_path TEXT NOT NULL,
             PRIMARY KEY(doc_id,asset_id,member_path));
+          CREATE TABLE IF NOT EXISTS archive_imports (
+            inventory_id TEXT PRIMARY KEY REFERENCES inventories(id), archive_root TEXT NOT NULL,
+            archive_uuid TEXT NOT NULL, manifest_sha256 TEXT NOT NULL);
+          CREATE TABLE IF NOT EXISTS archive_links (
+            asset_id TEXT PRIMARY KEY REFERENCES assets(id), source_id TEXT NOT NULL,
+            relative_path TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS extracted_assets (
             asset_id TEXT PRIMARY KEY REFERENCES assets(id), version TEXT NOT NULL);
         """)

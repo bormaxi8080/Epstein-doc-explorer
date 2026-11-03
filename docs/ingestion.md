@@ -10,8 +10,9 @@ dependency. No action runs implicitly after installation.
 Use the independent [archive downloader](archive-downloader.md) for the final
 PW-010 corpus. It has separate JSON/optional DB/destination paths, persistent
 resume, source hierarchy and offline audit. The small `explorer-ingest download`
-command below remains a backwards-compatible pilot helper. Archive JSONL-to-OCR
-adoption is a future adapter; no command automatically starts analysis.
+command below remains a backwards-compatible pilot helper. Use `adopt-archive` to connect a fully audited archive to a separate derived
+data root without copying or downloading original payloads. No command
+automatically starts analysis. See [offline hardening](development-hardening.md).
 
 ## Implemented stages
 
@@ -73,6 +74,7 @@ Example paths below are operator choices, not files created by installation:
 
 ```bash
 .venv/bin/explorer-ingest --data-root /path/to/ea-ingestion import-inventory /path/to/doj_disclosures.json
+.venv/bin/explorer-ingest --data-root /path/to/ea-ingestion adopt-archive /Volumes/Archive/doj
 .venv/bin/explorer-ingest --data-root /path/to/ea-ingestion status
 .venv/bin/explorer-ingest --data-root /path/to/ea-ingestion download --limit 10
 .venv/bin/explorer-ingest --data-root /path/to/ea-ingestion extract --limit 10

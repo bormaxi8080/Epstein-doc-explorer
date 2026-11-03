@@ -6,6 +6,10 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Offline `adopt-archive` links a complete audited corpus to a separate ingestion
+  root without copying originals; extraction checks source leases, audit bindings
+  and hashes while retaining every original occurrence.
+
 - Streaming 100k/million-asset benchmark tooling, bounded planner caches/indexes,
   and generated synthetic document/scan/table/TIFF/ZIP corpora.
 

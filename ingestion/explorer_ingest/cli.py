@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from .analysis import analyze_documents, approve_document
+from .archive_adoption import adopt_archive
 from .download import download_assets
 from .export import export_bundle
 from .extraction import extract_assets
@@ -21,6 +22,8 @@ def main(argv=None):
     inventory = sub.add_parser("import-inventory")
     inventory.add_argument("source", type=Path)
     inventory.add_argument("--allow-partial", action="store_true")
+    adopt = sub.add_parser("adopt-archive")
+    adopt.add_argument("archive_root", type=Path)
     download = sub.add_parser("download")
     download.add_argument("--allow-host", action="append", default=None)
     download.add_argument("--max-bytes", type=int, default=1024**3)
@@ -56,6 +59,8 @@ def main(argv=None):
         with store.writer():
             if args.command == "import-inventory":
                 result = import_inventory(store, args.source, args.allow_partial)
+            elif args.command == "adopt-archive":
+                result = adopt_archive(store, args.archive_root)
             elif args.command == "download":
                 result = download_assets(
                     store, args.limit, args.max_bytes, allow_hosts=args.allow_host

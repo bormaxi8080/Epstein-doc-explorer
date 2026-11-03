@@ -5,6 +5,7 @@ import shutil
 import zipfile
 from pathlib import Path, PurePosixPath
 
+from .archive_adoption import original_paths
 from .state import atomic_json, digest_file
 
 EXTRACTION_VERSION = "text-pdf-1"
@@ -32,7 +33,7 @@ def read_pages(path, name):
     return [], "unsupported"
 
 
-def register_document(store, asset, path, member):
+def register_document(store, asset, path, member, original_reference=None):
     sha = digest_file(path)
     doc_id = "DOJ_" + sha[:40]
     existing = store.db.execute("SELECT * FROM documents WHERE doc_id=?", (doc_id,)).fetchone()
@@ -55,7 +56,7 @@ def register_document(store, asset, path, member):
                     asset["id"],
                     member,
                     sha,
-                    store.relative(path),
+                    original_reference or store.relative(path),
                     status,
                     store.relative(page_path),
                     error,
@@ -75,9 +76,14 @@ def extract_assets(store, limit=10, max_bytes=512 * 1024**2, max_members=10000):
         ORDER BY id LIMIT ?""",
         (limit,),
     ).fetchall()
+    with original_paths(store, rows) as paths:
+        return _extract_batch(store, rows, paths, max_bytes, max_members)
+
+
+def _extract_batch(store, rows, paths, max_bytes, max_members):
     results = []
     for asset in rows:
-        path = store.path(asset["path"])
+        path = paths[asset["id"]]
         if digest_file(path) != asset["sha256"]:
             raise ValueError("Original checksum mismatch")
         name = json.loads(asset["metadata"]).get("original_name") or "unknown"
@@ -120,7 +126,7 @@ def extract_assets(store, limit=10, max_bytes=512 * 1024**2, max_members=10000):
         else:
             if path.stat().st_size > max_bytes:
                 raise ValueError("Extraction size exceeds budget")
-            register_document(store, asset, path, name)
+            register_document(store, asset, path, name, asset["path"])
             results.append({"asset_id": asset["id"], "documents": 1})
         with store.db:
             store.db.execute(

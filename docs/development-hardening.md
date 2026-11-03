@@ -54,3 +54,21 @@ rotated, table, image-only, encrypted and corrupt PDFs, a blank PNG, a two-page
 TIFF and safe/unsafe ZIPs. Everything is synthetic. These fixtures verify routing
 and robustness, not real OCR accuracy; encryption bytes may vary with toolchain.
 Two targeted generation/planning/extraction tests passed.
+
+## Delivered: audited archive adoption
+
+`explorer-ingest --data-root /path/to/derived adopt-archive /Volumes/Archive/doj`
+requires a certified inventory, successful full audit and unchanged verified
+manifest. It streams every manifest row through schema, ledger and receipt
+checks and rehashes every original before linking it. This is deliberately a
+full disk read; it does not call a model, download or start extraction.
+
+The independent ingestion ledger retains the input JSON and every occurrence;
+original payloads stay on the archive disk. Asset/document provenance uses
+`archive://<uuid>/<relative-path>` references. Repeating adoption is idempotent;
+explicit re-adoption can update a moved archive's location when UUID, inventory
+and manifest match. Partial/failed audits and conflicting existing bytes fail.
+Extraction leases each source archive for the batch, checks its audit binding
+and hashes each original again; derived pages and ZIP members stay in data-root.
+Archive and derived roots must not overlap. Existing pilot download remains
+compatible. Four focused handoff tests passed using synthetic local HTTP data.
