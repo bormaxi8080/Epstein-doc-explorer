@@ -6,6 +6,12 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Read-only `status --watch`, local `doctor` and opt-in filesystem probes.
+- Checksummed metadata backup/restore and missing-ledger recovery from frozen
+  inventory plus receipts; original bytes are preserved and restored audits
+  are invalidated before any ingestion handoff.
+- Measured million-asset synthetic planning (186 s, about 39 MB peak RSS).
+
 - Offline `adopt-archive` links a complete audited corpus to a separate ingestion
   root without copying originals; extraction checks source leases, audit bindings
   and hashes while retaining every original occurrence.

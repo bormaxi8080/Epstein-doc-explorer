@@ -78,7 +78,7 @@ class StorageUnavailable(ValueError):
 
 
 class Archive:
-    def __init__(self, destination, create=False):
+    def __init__(self, destination, create=False, recover=False):
         requested = Path(destination)
         if not requested.is_absolute() or not requested.is_dir():
             raise StorageUnavailable("Destination must be an existing absolute directory")
@@ -93,7 +93,9 @@ class Archive:
         if not create and not (self.control / "identity.json").is_file():
             raise ValueError("No download plan; run plan first")
         if create and not self.control.exists():
-            if (self.root / "archive-files").exists() or (self.root / "catalog").exists():
+            if not recover and (
+                (self.root / "archive-files").exists() or (self.root / "catalog").exists()
+            ):
                 raise ValueError("Destination contains unmanaged archive directories")
             self.control.mkdir()
         self.lock = self.path(f"{CONTROL}/writer.lock").open("a")
@@ -103,6 +105,8 @@ class Archive:
             self.lock.close()
             raise ValueError("Another downloader owns this destination") from exc
         try:
+            if recover and self.path(f"{CONTROL}/archive.sqlite3").exists():
+                raise ValueError("Rebuild never replaces an existing ledger")
             marker = self.path(f"{CONTROL}/identity.json")
             if not marker.exists():
                 if not create or (self.control / "archive.sqlite3").exists():

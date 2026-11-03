@@ -1,0 +1,14 @@
+{
+  "assets": 1000000,
+  "pages": 1000,
+  "json_bytes": 533928237,
+  "generation_seconds": 7.554639959009364,
+  "planning_seconds": 186.212234250037,
+  "peak_rss_bytes": 38830080,
+  "scratch_bytes": 2704507553,
+  "database_bytes": 1636651008,
+  "python": "3.12.10",
+  "platform": "darwin",
+  "network_requests": 0,
+  "planner_sha256": "23482064f2edef57efc7a823ba8adef6be2e55ac87d3c5135adc0ac60348dbd3"
+}

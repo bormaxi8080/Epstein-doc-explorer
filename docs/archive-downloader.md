@@ -244,3 +244,11 @@ resources and fixtures explicitly if the producer contract changes.
 | --- | --- |
 | `pw010-v1.schema.json` | `bb9b71b40f1539cf43d2535252888db74b088cbb467c0912dd0407720286a7be` |
 | `pw010-v2.schema.json` | `d29961fed7e4172835355f4c59afbd7bb6a65f4bf3620ca5555ea8500ade506e` |
+
+## Preparation, observation and recovery
+
+See [offline development and hardening](development-hardening.md) for versioned
+artifact contracts, bounded validators, crash tests, synthetic corpora/scale,
+`adopt-archive`, read-only `status --watch`, `doctor`, metadata backup/restore and
+missing-ledger recovery. Metadata backups exclude original payloads; restoring
+always requires a fresh full audit before adoption.

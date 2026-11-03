@@ -12,6 +12,8 @@ from ijson.common import JSONError
 from jsonschema import ValidationError
 
 from .archive_catalog import CONTROL, Archive, StorageUnavailable, artifact_json, plan, report
+from .archive_maintenance import backup, rebuild, restore
+from .archive_observer import ArchiveView, doctor, snapshot, watch
 from .archive_transfer import Options, fetch, quarantine, storage_check, verify
 
 
@@ -48,7 +50,28 @@ def main(argv=None):
     checking.add_argument(
         "--limit", type=int, default=0, help="Bounded audit; only a full audit can pass"
     )
-    commands.add_parser("status", help="Offline ledger status; not a fresh disk audit")
+    status = commands.add_parser("status", help="Read-only status; not a fresh disk audit")
+    status.add_argument(
+        "--watch", action="store_true", help="Print JSONL snapshots until interrupted"
+    )
+    status.add_argument("--interval", type=float, default=2)
+    status.add_argument("--samples", type=int, default=0, help="0 watches until interrupted")
+    diagnosis = commands.add_parser("doctor", help="Local preflight; no network")
+    diagnosis.add_argument(
+        "--write-probe", action="store_true", help="Explicit temporary fsync/rename probe"
+    )
+    saving = commands.add_parser("backup", help="Snapshot metadata; excludes original payloads")
+    saving.add_argument("output", type=Path)
+    restoring = commands.add_parser(
+        "restore", help="Restore metadata into a destination with no plan"
+    )
+    restoring.add_argument("source", type=Path)
+    rebuilding = commands.add_parser(
+        "rebuild", help="Rebuild a missing ledger from JSON and receipts"
+    )
+    rebuilding.add_argument("--dump", required=True, type=Path)
+    rebuilding.add_argument("--receipts", required=True, type=Path)
+    rebuilding.add_argument("--allow-partial", action="store_true")
     repair = commands.add_parser(
         "quarantine", help="Offline: preserve one suspect artifact and permit its retry"
     )
@@ -72,11 +95,43 @@ def main(argv=None):
     try:
         settings = json.loads(args.config.read_text()) if args.config else {}
         options = Options(**settings)
-        archive = Archive(args.destination, create=args.command == "plan")
+        if args.command == "doctor":
+            result = doctor(args.destination, options.reserve_bytes, args.write_probe)
+            print(json.dumps(result, indent=2))
+            return 0 if result["ok"] else 1
+        if args.command == "restore":
+            doctor(args.destination, options.reserve_bytes)
+            result = restore(args.destination, args.source, options.reserve_bytes)
+            print(json.dumps(result, indent=2))
+            return 0
+        if args.command == "status":
+            archive = ArchiveView(args.destination)
+            if args.watch:
+                for result in watch(archive, args.interval, args.samples):
+                    print(json.dumps(result), flush=True)
+            else:
+                print(json.dumps(snapshot(archive)[0], indent=2))
+            return 0
+        if args.command == "backup":
+            output = args.output.resolve()
+            if output == checkout or checkout in output.parents:
+                raise ValueError("Backup metadata must be outside the source checkout")
+        archive = Archive(
+            args.destination,
+            create=args.command in ("plan", "rebuild"),
+            recover=args.command == "rebuild",
+        )
         if args.command == "plan":
             if not archive.meta("plan_complete"):
                 storage_check(archive, options, args.dump.stat().st_size * 3)
             result = plan(archive, args.dump, args.evidence_db, args.allow_partial)
+        elif args.command == "backup":
+            result = backup(archive, args.output, options.reserve_bytes)
+            print(json.dumps(result, indent=2))
+            return 0
+        elif args.command == "rebuild":
+            storage_check(archive, options, args.dump.stat().st_size * 3)
+            result = rebuild(archive, args.dump, args.receipts, options, args.allow_partial)
         elif args.command == "fetch":
             with archive.db:
                 archive.set_meta("last_fetch_options", asdict(options))
@@ -94,11 +149,11 @@ def main(argv=None):
             report(archive) if args.command == "quarantine" else result,
         )
         print(json.dumps(result, indent=2))
-        if args.command in ("fetch", "verify"):
+        if args.command in ("fetch", "verify", "rebuild"):
             if result["statuses"].get("failed"):
                 return 1
             if (
-                args.command == "verify"
+                args.command in ("verify", "rebuild")
                 and not result["complete_at_last_audit"]
                 or not result["download_complete"]
             ):
