@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Streaming 100k/million-asset benchmark tooling, bounded planner caches/indexes,
+  and generated synthetic document/scan/table/TIFF/ZIP corpora.
+
 - Isolated format validators with wall/CPU/RSS limits, parent-death cleanup,
   resumable operator stop and subprocess crash tests at durability boundaries.
 

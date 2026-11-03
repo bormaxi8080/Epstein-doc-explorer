@@ -34,3 +34,23 @@ references, ledger commit and audit publication. An unreceipted complete partial
 restarts safely rather than requesting a range beyond EOF. Originals are never
 silently overwritten. Five focused tests passed, including actual child memory
 allocation and forced subprocess exits; prior unrelated regression checks passed.
+
+## Delivered: synthetic scale and document corpora
+
+`python scripts/benchmark_archive.py --count 100000 --output /tmp/scale.json`
+generates and plans a temporary synthetic inventory, records peak RSS, timing,
+SQLite/scratch sizes and planner hash, and removes all large scratch files.
+`--count 1000000` is an explicit million-file run; it is not part of fast tests.
+Admission and periodic checks preserve an 8 GiB scratch reserve by default, and
+an RSS acceptance threshold defaults to 512 MiB. No fixture URL is downloaded.
+
+The planner caches validators and at most 8192 directory paths. Parent/status
+indexes avoid repeated scans while preserving the same portable output paths.
+A 10,000-asset run used about 39 MB RSS and 1.7 s planning on the development
+machine; larger measured runs are recorded separately, not inferred as an SLA.
+
+`python scripts/generate_corpus.py /tmp/synthetic-corpus` creates labeled text,
+rotated, table, image-only, encrypted and corrupt PDFs, a blank PNG, a two-page
+TIFF and safe/unsafe ZIPs. Everything is synthetic. These fixtures verify routing
+and robustness, not real OCR accuracy; encryption bytes may vary with toolchain.
+Two targeted generation/planning/extraction tests passed.

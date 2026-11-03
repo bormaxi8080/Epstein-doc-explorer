@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import uuid
 from contextlib import closing
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
@@ -137,6 +138,8 @@ class Archive:
                 relative_path TEXT NOT NULL UNIQUE COLLATE NOCASE);
               CREATE TABLE IF NOT EXISTS storage_assets(asset_id TEXT PRIMARY KEY);
               CREATE INDEX IF NOT EXISTS idx_placements_asset ON placements(asset_id);
+              CREATE INDEX IF NOT EXISTS idx_nodes_parent ON nodes(parent);
+              CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status,actual_bytes,expected_bytes);
             """)
             stat = database.stat()
             self.database_identity = (stat.st_dev, stat.st_ino)
@@ -306,6 +309,7 @@ def plan(archive, source, evidence_db=None, allow_partial=False):
         raise ValueError("Only PW-010 JSON schema v1/v2 is supported")
     schema = json.loads(Path(__file__).with_name(f"pw010-v{version}.schema.json").read_text())
 
+    @lru_cache(maxsize=None)
     def validator(name):
         return Draft202012Validator({"$defs": schema["$defs"], "$ref": f"#/$defs/{name}"})
 
@@ -436,25 +440,35 @@ def plan(archive, source, evidence_db=None, allow_partial=False):
             ).fetchone()
         ):
             raise ValueError("Legacy storage tree does not match the asset registry")
-        for node in archive.db.execute("SELECT seq,node_id,asset_id FROM nodes WHERE kind='file'"):
-            ancestors = archive.db.execute(
-                """WITH RECURSIVE chain AS (
-                SELECT seq,parent,node_id,name,0 depth FROM nodes WHERE seq=? UNION ALL
-                SELECT n.seq,n.parent,n.node_id,n.name,c.depth+1 FROM nodes n JOIN chain c ON n.seq=c.parent)
-                SELECT node_id,name FROM chain ORDER BY depth DESC""",
-                (node["seq"],),
-            ).fetchall()
+
+        @lru_cache(maxsize=8192)
+        def directory_path(sequence):
+            if sequence is None:
+                return "catalog"
+            row = archive.db.execute(
+                "SELECT parent,node_id,name FROM nodes WHERE seq=?", (sequence,)
+            ).fetchone()
+            return str(
+                Path(directory_path(row["parent"]), component(row["name"] + "_" + row["node_id"]))
+            )
+
+        for index, node in enumerate(
+            archive.db.execute(
+                "SELECT seq,parent,node_id,name,asset_id FROM nodes WHERE kind='file'"
+            )
+        ):
             relative = str(
                 Path(
-                    "catalog",
-                    *(component(row["name"] + "_" + row["node_id"]) for row in ancestors[:-1]),
-                    component(ancestors[-1]["name"] + "_" + node["node_id"]) + ".ref.json",
+                    directory_path(node["parent"]),
+                    component(node["name"] + "_" + node["node_id"]) + ".ref.json",
                 )
             )
             archive.db.execute(
                 "INSERT INTO placements VALUES (?,?,?)",
                 (node["node_id"], node["asset_id"], relative),
             )
+            if index % 5000 == 0:
+                archive.check()
         archive.set_meta("source_sha256", sha)
         archive.set_meta("source_metadata", metadata)
         archive.set_meta("source_validation", checks)
