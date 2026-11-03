@@ -75,8 +75,34 @@ class AdoptionTests(fixtures.HTTPFixture):
         with self.assertRaisesRegex(ValueError, "full audit"):
             adopt_archive(self.store, self.root)
 
+    def test_changed_manifest_is_rejected_before_import(self):
+        self.completed()
+        manifest = self.root / CONTROL / "verified-files.jsonl"
+        manifest.write_text(manifest.read_text() + "\n")
+        with self.assertRaisesRegex(ValueError, "manifest changed"):
+            adopt_archive(self.store, self.root)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM assets").fetchone()[0], 0)
+
+    def test_receipt_source_binding_cannot_be_replaced_with_equal_bytes(self):
+        self.completed()
+        archive = Archive(self.root)
+        try:
+            receipt_path = next((self.root / CONTROL / "receipts").glob("*.json"))
+            receipt = json.loads(receipt_path.read_text())
+            receipt["source_sha256"] = "0" * 64
+            receipt_path.write_text(json.dumps(receipt))
+            with archive.db:
+                archive.db.execute("UPDATE assets SET receipt=?", (json.dumps(receipt),))
+        finally:
+            archive.close()
+        with self.assertRaisesRegex(ValueError, "receipt disagree"):
+            adopt_archive(self.store, self.root)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM assets").fetchone()[0], 0)
+
     def test_writer_lease_and_overlapping_roots_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "owns"):
             adopt_archive(self.store, self.root)
+        nested = Store(self.root / "nested")
+        self.addCleanup(nested.close)
         with self.assertRaisesRegex(ValueError, "separate roots"):
-            adopt_archive(Store(self.root / "nested"), self.root)
+            adopt_archive(nested, self.root)

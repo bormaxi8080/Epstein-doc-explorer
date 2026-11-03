@@ -141,14 +141,16 @@ baseline with colliding DOJ IDs is rejected.
 `ingestion_evidence` joins graph triples to exact page quotes and assertion type.
 Upstream RDF field names and JSON-array encodings remain compatible. Unknown
 people are scoped by document ID, and disconnected entities use hop distance
-1000. Original bytes remain in the external data root; the bundle manifest
+1000. Original bytes remain in the independent archive or pilot data root; the bundle manifest
 explicitly says `originals_included=false`. A `file_path` is a portable reference,
 not an implemented original-file serving endpoint.
 
 ## Verification
 
 ```bash
-PYTHONPATH=ingestion .venv/bin/python -m unittest discover -s ingestion/tests -v
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/python scripts/check_offline.py
+.venv/bin/ruff check ingestion scripts/check_offline.py scripts/benchmark_archive.py scripts/generate_corpus.py
 npm run typecheck:api
 (cd network-ui && npm run build)
 postman simulation run postman/simulations/fcc.sim.yaml --port 4010 --no-history --output ndjson
@@ -156,8 +158,16 @@ postman simulation run postman/simulations/fcc.sim.yaml --port 4010 --no-history
 FCC_TEST_BASE_URL=http://127.0.0.1:4010/fcc PYTHONPATH=ingestion .venv/bin/python -m unittest discover -s ingestion/tests -v
 ```
 
+The offline runner starts the existing synthetic archive/FCC HTTP handlers on
+loopback and sets both integration-test URLs, so those tests are not skipped.
+It verifies an inherited Python audit guard that blocks external DNS/connect
+operations in test/validator subprocesses. It requires Node, but no Postman
+installation, proxy, credentials or real archive. Dependencies must already be
+installed; installation itself may need package registries. Optional Postman
+simulation remains available for request-event inspection.
+
 The tests use synthetic inputs and exercise the real HTTP adapter against the
-local Postman stand-in. They cover approval/cache invalidation, baseline
+local stand-ins. They cover approval/cache invalidation, baseline
 preservation, evidence/date rejection, ZIP traversal/deduplication, PDF OCR
 handoff, bounded download, truncation, timeouts, 429 and 5xx behavior. Inspect
 simulation request events as well as test results. Logs contain synthetic text
@@ -168,8 +178,9 @@ subset. The stand-in is defined from the caller contract and public FCC docs.
 ## Planned work before a full archive/public deployment
 
 - Full schema coverage and performance validation on the actual certified dump.
-- Conditional/Range downloads, response metadata receipts and content-version
-  tracking across snapshots; authoritative identity mapping when available.
+- Cross-snapshot content-version tracking and authoritative identity mapping.
+  Conditional/Range resume and response receipts are already implemented by
+  the standalone downloader for one immutable source snapshot.
 - OCR and layout quality, DAT/OPT reconstruction, nested archives, media and
   Office formats; large-file streaming extraction and storage admission control.
 - Tokenizer-aware grouping across pages, document synthesis, semantic tag

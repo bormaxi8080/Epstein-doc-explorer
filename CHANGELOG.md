@@ -6,6 +6,12 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Explicit adoption checks bind receipts to the same source snapshot, asset and
+  original path, even when another receipt describes equal bytes.
+- Self-contained loopback archive/FCC test runner with inherited external-socket
+  guard; CI covers Python 3.10/3.12, lint, format, corpus generation, planner
+  smoke checks and API types. Larger synthetic CI benchmarks are manual only.
+
 - Metadata backup/restore destination identity checks and durable nested-directory
   publication prevent fallback writes after storage replacement.
 

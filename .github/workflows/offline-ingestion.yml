@@ -1,0 +1,110 @@
+name: Offline ingestion checks
+
+on:
+  push:
+    paths:
+      - 'ingestion/**'
+      - 'scripts/**'
+      - 'postman/**'
+      - 'pyproject.toml'
+      - 'api_server.ts'
+      - 'tsconfig*.json'
+      - 'package*.json'
+      - '.github/workflows/offline-ingestion.yml'
+  pull_request:
+    paths:
+      - 'ingestion/**'
+      - 'scripts/**'
+      - 'postman/**'
+      - 'pyproject.toml'
+      - 'api_server.ts'
+      - 'tsconfig*.json'
+      - 'package*.json'
+      - '.github/workflows/offline-ingestion.yml'
+  workflow_dispatch:
+    inputs:
+      scale_count:
+        description: Synthetic planner assets (no archive requests)
+        type: choice
+        options: ['10000', '100000', '1000000']
+        default: '10000'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /ingestion/
+            /scripts/
+            /postman/
+            /pyproject.toml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -e '.[dev]'
+      - run: ruff check ingestion scripts/check_offline.py scripts/benchmark_archive.py scripts/generate_corpus.py
+      - run: ruff format --check ingestion scripts/check_offline.py scripts/benchmark_archive.py scripts/generate_corpus.py
+      - run: python scripts/check_offline.py
+      - run: python scripts/benchmark_archive.py --count 10000 --output '${{ runner.temp }}/scale-smoke.json'
+      - run: python scripts/generate_corpus.py '${{ runner.temp }}/synthetic-corpus'
+
+  api-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /api_server.ts
+            /package.json
+            /package-lock.json
+            /tsconfig*.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+        env:
+          HUSKY: '0'
+      - run: npm run typecheck:api
+
+  explicit-scale:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /ingestion/
+            /scripts/
+            /pyproject.toml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e .
+      - run: python scripts/benchmark_archive.py --count "$SCALE_COUNT" --output '${{ runner.temp }}/scale.json'
+        env:
+          SCALE_COUNT: ${{ inputs.scale_count }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-scale
+          path: ${{ runner.temp }}/scale.json

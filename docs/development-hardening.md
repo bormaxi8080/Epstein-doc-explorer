@@ -71,7 +71,8 @@ and manifest match. Partial/failed audits and conflicting existing bytes fail.
 Extraction leases each source archive for the batch, checks its audit binding
 and hashes each original again; derived pages and ZIP members stay in data-root.
 Archive and derived roots must not overlap. Existing pilot download remains
-compatible. Four focused handoff tests passed using synthetic local HTTP data.
+compatible. Six focused handoff tests passed using synthetic local HTTP data, including
+changed manifests and receipts rebound to another source snapshot.
 
 ## Delivered: observation, preflight and metadata recovery
 
@@ -103,8 +104,8 @@ inventory, identity and canonical receipts with a versioned checksummed JSONL
 file list. It excludes originals, partial bytes, credentials and derived OCR.
 Keep a separate backup of original payloads; a metadata backup cannot recreate
 missing original bytes without another explicit `fetch`. Output must be a new
-external directory. The configured free-space reserve and destination filesystem identity are
-checked while copying. Copied files and nested directories are fsynced before
+external directory. The configured free-space reserve and destination filesystem
+identity are checked while copying. Copied files and nested directories are fsynced before
 publication; loss/replacement of the metadata disk stops the operation.
 
 `restore` verifies every backup member before publishing metadata and refuses
@@ -130,7 +131,8 @@ is retained; a missing marker creates a new UUID, requiring a new derived root.
 Rebuild never guesses hashes or trusts matching sizes. On a failure, provisional
 metadata and original bytes remain for inspection; use `verify`, quarantine and
 explicit fetch to proceed rather than replacing the ledger again. Seven focused
-operation tests passed, including destination identity loss, against temporary synthetic archives.
+operation tests passed against temporary synthetic archives, including
+destination identity loss.
 
 ## Measured scale
 
@@ -143,3 +145,32 @@ content validation, adoption, OCR throughput or real archive shape. Earlier
 100,000-asset exploratory planning took 16.71 seconds / 40.17 MB RSS. Timing is
 machine-dependent and is not a service guarantee. Large scratch files were
 removed after each run.
+
+## Delivered: repeatable offline checks and CI
+
+```bash
+python scripts/check_offline.py
+python scripts/check_offline.py --pattern test_archive_operations.py
+```
+
+The runner launches the existing Node archive and FCC handlers with loopback
+binding and temporary logs, sets both test URLs, checks that external DNS and
+connect attempts are rejected by an inherited Python audit hook, and cleans up
+its own server processes. This is a test guard, not an OS sandbox. No Postman
+account or installed CLI is required; the same handlers remain usable through
+Postman simulation for detailed traffic inspection.
+
+`.github/workflows/offline-ingestion.yml` runs lint/format, all synthetic tests,
+10k-asset planning and corpus generation on Python 3.10/3.12, plus the scoped API
+typecheck. Checkout excludes real archive/LFS data, tests use no provider secrets,
+and nothing deploys or downloads archive payloads. Dependency installation uses
+package registries. Manual workflow dispatch selects 10k, 100k or million-asset
+planning and uploads only its synthetic measurement JSON. Large tests do not run
+on ordinary pushes. Development tools are available with `pip install -e '.[dev]'`.
+
+Final local checks on Python 3.12.10 passed: **69 tests, no skips**, Ruff lint and
+format, API typecheck, workflow YAML parsing, 10k-asset planner smoke, synthetic
+corpus generation and Python wheel inclusion of all four JSON schemas.
+The GitHub-hosted workflow and its Linux/Python 3.10 matrix have not yet run.
+Live FCC/NVIDIA compatibility, real-source transfers, actual corpus completeness,
+OCR accuracy and production hosting still require the later authorized pilot.

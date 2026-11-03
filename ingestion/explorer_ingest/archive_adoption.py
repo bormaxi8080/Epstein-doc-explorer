@@ -56,6 +56,9 @@ def adopt_archive(store, destination):
                 receipt = read_artifact(archive.path(item["receipt"]), "receipt")
                 if (
                     receipt != json.loads(row["receipt"])
+                    or receipt["asset_id"] != item["asset_id"]
+                    or receipt["source_sha256"] != source_sha
+                    or receipt["relative_path"] != item["relative_path"]
                     or receipt["sha256"] != item["sha256"]
                     or receipt["actual_bytes"] != item["bytes"]
                 ):

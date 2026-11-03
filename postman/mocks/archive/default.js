@@ -23,4 +23,4 @@ http.createServer((req, res) => {
   if (status === 206) headers['Content-Range'] = `bytes ${start}-${payload.length-1}/${payload.length}`;
   res.writeHead(status,headers);
   res.end(payload.subarray(start));
-}).listen(process.env.PORT || 4011);
+}).listen(process.env.PORT || 4011, process.env.HOST);

@@ -53,6 +53,8 @@ import Oriol runtime modules or edit sibling projects as part of this pipeline.
 - Add proportional regression coverage for changes in ingestion, evidence,
   resume, export, schema or provider behavior. Test HTTP behavior against local
   stand-ins, and state what still needs live provider validation.
+- Use `python scripts/check_offline.py` for all synthetic tests without live
+  services; test handlers bind to loopback and external Python sockets are blocked.
 - Run the checks documented in `docs/ingestion.md` and the frontend build when
   touching the frontend. Update docs and CHANGELOG with user-visible behavior.
 - Follow `VERSIONING.md`; do not tag or push without explicit instruction.

@@ -70,4 +70,4 @@ http.createServer(async (req, res) => {
     content: [{ type: 'text', text: JSON.stringify(analysis) }],
     usage: { input_tokens: 25, output_tokens: 50 }
   }));
-}).listen(process.env.PORT || 4010);
+}).listen(process.env.PORT || 4010, process.env.HOST);
