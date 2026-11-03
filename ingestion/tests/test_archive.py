@@ -278,7 +278,7 @@ class CatalogTests(ArchiveFixture):
         self.assertFalse(self.archive.meta("plan_complete"))
 
 
-class TransferTests(ArchiveFixture):
+class HTTPFixture(ArchiveFixture):
     def setUp(self):
         super().setUp()
         self.requests = []
@@ -366,6 +366,8 @@ class TransferTests(ArchiveFixture):
         self.assertEqual(path.read_bytes(), PDF)
         self.assertTrue(verify(self.archive, self.options)["complete_at_last_audit"])
 
+
+class TransferTests(HTTPFixture):
     def test_real_http_download_offline_full_audit_and_manifest(self):
         self.assert_downloaded()
         with patch(

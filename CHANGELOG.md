@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Isolated format validators with wall/CPU/RSS limits, parent-death cleanup,
+  resumable operator stop and subprocess crash tests at durability boundaries.
+
 - Versioned archive artifact schemas, v1 compatibility fixtures, safe-path and
   semantic completeness checks at publication/consumption boundaries.
 

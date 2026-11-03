@@ -2,7 +2,9 @@
 
 import argparse
 import json
+import signal
 import sqlite3
+import threading
 from dataclasses import asdict
 from pathlib import Path
 
@@ -59,6 +61,14 @@ def main(argv=None):
     if getattr(args, "limit", 0) < 0:
         parser.error("--limit cannot be negative")
     archive = None
+    old_term = None
+    if threading.current_thread() is threading.main_thread():
+        old_term = signal.getsignal(signal.SIGTERM)
+
+        def stop(signum, frame):
+            raise KeyboardInterrupt
+
+        signal.signal(signal.SIGTERM, stop)
     try:
         settings = json.loads(args.config.read_text()) if args.config else {}
         options = Options(**settings)
@@ -94,6 +104,11 @@ def main(argv=None):
             ):
                 return 2
         return 0
+    except KeyboardInterrupt:
+        print(
+            json.dumps({"status": "paused", "reason": "Operator stop; durable checkpoint retained"})
+        )
+        return 2
     except StorageUnavailable as exc:
         print(json.dumps({"status": "paused", "reason": str(exc)}))
         return 2
@@ -125,6 +140,8 @@ def main(argv=None):
         )
         return 1
     finally:
+        if old_term is not None:
+            signal.signal(signal.SIGTERM, old_term)
         if archive is not None:
             archive.close()
 

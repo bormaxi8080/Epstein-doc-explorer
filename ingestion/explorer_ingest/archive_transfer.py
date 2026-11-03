@@ -8,11 +8,12 @@ import math
 import os
 import re
 import shutil
+import sys
 import time
 import urllib.error
 import urllib.request
 import zipfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 from urllib.parse import urlsplit
@@ -28,6 +29,8 @@ from .archive_catalog import (
     sync_directory,
 )
 from .archive_contracts import read_artifact, validate_artifact
+from .archive_faults import boundary
+from .archive_limits import ValidationBudgetError, run_limited
 from .state import digest_file
 from .transport import tls_context
 
@@ -53,6 +56,8 @@ class Options:
     retry_delay: float = 1
     max_zip_bytes: int = 20 * 1024**3
     max_zip_members: int = 1000000
+    validation_timeout: float = 30
+    validation_memory_mb: int = 512
 
     def __post_init__(self):
         if (
@@ -70,6 +75,7 @@ class Options:
                 self.chunk_bytes,
                 self.max_zip_bytes,
                 self.max_zip_members,
+                self.validation_memory_mb,
             )
         ):
             raise ValueError(
@@ -77,10 +83,21 @@ class Options:
             )
         if any(
             not isinstance(value, (int, float)) or not math.isfinite(value)
-            for value in (self.timeout, self.request_delay, self.retry_delay)
+            for value in (
+                self.timeout,
+                self.request_delay,
+                self.retry_delay,
+                self.validation_timeout,
+            )
         ):
             raise ValueError("Timeouts and delays must be finite numbers")
-        if not 0 <= self.retries <= 10 or self.timeout <= 0 or self.reserve_bytes < 0:
+        if (
+            not 0 <= self.retries <= 10
+            or self.timeout <= 0
+            or self.reserve_bytes < 0
+            or self.validation_timeout <= 0
+            or self.validation_memory_mb < 16
+        ):
             raise ValueError("Invalid retry, timeout or reserve settings")
         if (
             min(self.max_file_bytes, self.chunk_bytes, self.max_zip_bytes, self.max_zip_members)
@@ -96,7 +113,7 @@ def utc_now():
 
 
 def safe_error(exc):
-    if isinstance(exc, IntegrityError):
+    if isinstance(exc, (IntegrityError, ValidationBudgetError)):
         return type(exc).__name__ + ": " + str(exc)
     if isinstance(exc, urllib.error.HTTPError):
         return "HTTP " + str(exc.code)
@@ -125,6 +142,27 @@ def checked_url(value, options):
 
 
 def validate_content(path, metadata, options, check=lambda: None):
+    response = run_limited(
+        [sys.executable, "-m", "explorer_ingest.archive_validation_worker"],
+        {
+            "path": str(path),
+            "metadata": metadata,
+            "options": asdict(options),
+            "parent_pid": os.getpid(),
+        },
+        options,
+        check,
+    )
+    if "error_type" in response:
+        if response["error_type"] == "BadZipFile":
+            raise zipfile.BadZipFile("ZIP content validation failed")
+        if response["error_type"] == "MemoryError":
+            raise ValidationBudgetError("Content validator exhausted its memory budget")
+        raise IntegrityError(response.get("message", "Content validation failed"))
+    return validate_artifact("content_validation", response["result"])
+
+
+def _validate_content(path, metadata, options, check=lambda: None):
     with path.open("rb") as stream:
         prefix = stream.read(1024)
     kind, name = metadata["file_kind"], metadata["original_name"].lower()
@@ -231,6 +269,7 @@ def mark_downloaded(archive, row, receipt, receipt_path, options):
                 "receipt": str(receipt_path.relative_to(archive.root)),
             },
         )
+    boundary("references_committed")
     with archive.db:
         archive.db.execute(
             """UPDATE assets SET status='downloaded',sha256=?,actual_bytes=?,validation=?,receipt=?,error=NULL WHERE id=?""",
@@ -242,6 +281,7 @@ def mark_downloaded(archive, row, receipt, receipt_path, options):
                 row["id"],
             ),
         )
+    boundary("ledger_committed")
 
 
 def recover_publication(archive, row, options):
@@ -263,6 +303,7 @@ def recover_publication(archive, row, options):
         archive.make_parent(destination)
         candidate.replace(destination)
         sync_directory(destination.parent)
+    boundary("original_published")
     mark_downloaded(archive, row, receipt, receipt_path, options)
     sidecar.unlink(missing_ok=True)
     return True
@@ -309,6 +350,10 @@ def receive(archive, row, options):
                 offset = checkpoint
                 with partial.open("r+b") as stream:
                     stream.truncate(offset)
+    if expected is not None and offset >= expected:
+        # A complete partial without a receipt may precede validation/publication.
+        # Restart safely instead of requesting an impossible bytes=N- range.
+        offset = 0
     storage_check(archive, options, max(0, (expected or options.chunk_bytes) - offset))
     url = metadata.get("download_url") or metadata["url"]
     checked_url(url, options)
@@ -378,6 +423,7 @@ def receive(archive, row, options):
             "checkpoint_sha256": hasher.hexdigest(),
         }
         artifact_json(sidecar, "partial", partial_metadata)
+        boundary("partial_checkpoint")
         received, last_progress = offset, time.monotonic()
         with partial.open("ab" if offset else "wb") as output:
             try:
@@ -399,6 +445,7 @@ def receive(archive, row, options):
                             checkpoint_bytes=received, checkpoint_sha256=hasher.hexdigest()
                         )
                         artifact_json(sidecar, "partial", partial_metadata)
+                        boundary("partial_checkpoint")
                         artifact_json(
                             archive.path(f"{CONTROL}/progress.json"),
                             "progress",
@@ -417,6 +464,7 @@ def receive(archive, row, options):
                     checkpoint_bytes=received, checkpoint_sha256=hasher.hexdigest()
                 )
                 artifact_json(sidecar, "partial", partial_metadata)
+                boundary("partial_checkpoint")
         if target is not None and received != target:
             raise http.client.IncompleteRead(b"", target - received)
         content = validate_content(
@@ -446,9 +494,11 @@ def receive(archive, row, options):
     archive.check()
     # Receipt first: a crash before/after rename is reconciled without a second GET.
     artifact_json(receipt_path, "receipt", receipt)
+    boundary("receipt_committed")
     archive.make_parent(destination)
     partial.replace(destination)
     sync_directory(destination.parent)
+    boundary("original_published")
     mark_downloaded(archive, row, receipt, receipt_path, options)
     sidecar.unlink(missing_ok=True)
 
@@ -500,7 +550,7 @@ def fetch(archive, options, limit=0, allow_partial=False):
                 PyPdfError,
             ) as exc:
                 archive.check()
-                retryable = not isinstance(exc, IntegrityError)
+                retryable = not isinstance(exc, (IntegrityError, ValidationBudgetError))
                 delay = options.retry_delay * (2**attempt)
                 if isinstance(exc, urllib.error.HTTPError):
                     retryable = exc.code in (408, 416, 429, 500, 502, 503, 504)
@@ -613,6 +663,7 @@ def verify(archive, options, limit=0):
     passed = not limit and checked == total and not failures
     if passed:
         temporary.replace(manifest)
+        boundary("audit_manifest_published")
         sync_directory(manifest.parent)
     else:
         temporary.unlink(missing_ok=True)

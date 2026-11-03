@@ -1,5 +1,8 @@
 {
-  "allow_hosts": ["www.justice.gov", "justice.gov"],
+  "allow_hosts": [
+    "www.justice.gov",
+    "justice.gov"
+  ],
   "allow_http": false,
   "timeout": 60,
   "retries": 2,
@@ -9,5 +12,7 @@
   "request_delay": 1,
   "retry_delay": 1,
   "max_zip_bytes": 21474836480,
-  "max_zip_members": 1000000
+  "max_zip_members": 1000000,
+  "validation_timeout": 30,
+  "validation_memory_mb": 512
 }
