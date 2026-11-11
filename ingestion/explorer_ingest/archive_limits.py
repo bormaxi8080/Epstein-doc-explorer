@@ -43,12 +43,24 @@ def run_limited(command, payload, options, check=lambda: None):
         start_new_session=True,
     )
     started, request = time.monotonic(), json.dumps(payload)
+    monitor_failures = 0
     try:
         while True:
             check()
             if time.monotonic() - started > options.validation_timeout:
                 raise ValidationBudgetError("Content validation wall-time budget exceeded")
-            if resident_bytes(process.pid) > options.validation_memory_mb * 1024**2:
+            try:
+                resident = resident_bytes(process.pid)
+                monitor_failures = 0
+            except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
+                monitor_failures += 1
+                if monitor_failures >= 3:
+                    raise ValidationBudgetError(
+                        "Resident-memory monitoring failed after three attempts"
+                    ) from exc
+                time.sleep(0.05)
+                continue
+            if resident > options.validation_memory_mb * 1024**2:
                 raise ValidationBudgetError("Content validation resident-memory budget exceeded")
             try:
                 output, _ = process.communicate(input=request, timeout=0.05)

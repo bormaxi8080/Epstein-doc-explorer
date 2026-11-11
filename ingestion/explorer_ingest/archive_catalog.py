@@ -7,8 +7,10 @@ import os
 import re
 import shutil
 import sqlite3
+import sys
 import uuid
 from contextlib import closing
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
@@ -44,6 +46,26 @@ def atomic_json(path, value):
 def artifact_json(path, kind, value):
     validate_artifact(kind, value)
     atomic_json(path, value)
+
+
+def log_event(archive, event, **details):
+    record = {"at": datetime.now(timezone.utc).isoformat(), "event": event, **details}
+    line = json.dumps(record, ensure_ascii=False)
+    with archive.path(f"{CONTROL}/events.jsonl").open("a", encoding="utf-8") as output:
+        output.write(line + "\n")
+    print(line, file=sys.stderr, flush=True)
+
+
+def logical_component(value):
+    value = str(value)
+    name = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", value).rstrip(" .") or "unnamed"
+    if len(name.encode("utf-8")) > 160:
+        name = (
+            name.encode("utf-8")[:140].decode("utf-8", errors="ignore")
+            + "--"
+            + hashlib.sha256(value.encode()).hexdigest()[:16]
+        )
+    return name
 
 
 def component(value):
@@ -94,7 +116,9 @@ class Archive:
             raise ValueError("No download plan; run plan first")
         if create and not self.control.exists():
             if not recover and (
-                (self.root / "archive-files").exists() or (self.root / "catalog").exists()
+                (self.root / "archive-files").exists()
+                or (self.root / "catalog").exists()
+                or (self.root / "originals").exists()
             ):
                 raise ValueError("Destination contains unmanaged archive directories")
             self.control.mkdir()
@@ -121,8 +145,10 @@ class Archive:
             self.db = sqlite3.connect(database)
             self.db.row_factory = sqlite3.Row
             self.db.executescript("""
+              PRAGMA page_size=65536;
               PRAGMA journal_mode=DELETE;
               PRAGMA synchronous=FULL;
+              PRAGMA cache_size=-262144;
               PRAGMA foreign_keys=ON;
               CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
               CREATE TABLE IF NOT EXISTS assets(
@@ -143,6 +169,8 @@ class Archive:
               CREATE TABLE IF NOT EXISTS storage_assets(asset_id TEXT PRIMARY KEY);
               CREATE INDEX IF NOT EXISTS idx_placements_asset ON placements(asset_id);
               CREATE INDEX IF NOT EXISTS idx_nodes_parent ON nodes(parent);
+              CREATE TABLE IF NOT EXISTS pilot_assets(
+                rank INTEGER PRIMARY KEY, asset_id TEXT UNIQUE NOT NULL REFERENCES assets(id));
               CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status,actual_bytes,expected_bytes);
             """)
             stat = database.stat()
@@ -285,12 +313,19 @@ def stream_nodes(archive, source, validator, root="tree"):
                     archive.db.execute("INSERT INTO storage_assets VALUES (?)", (node["asset_id"],))
                 if sequence % 5000 == 0:
                     archive.check()
+                    log_event(archive, "plan_tree", nodes=sequence)
     return keys
 
 
-def plan(archive, source, evidence_db=None, allow_partial=False):
+def plan(archive, source, evidence_db=None, allow_partial=False, layout=None):
     archive.check()
+    layout = layout or archive.meta("layout", "url")
+    if layout not in ("url", "logical"):
+        raise ValueError("Layout must be url or logical")
+    if archive.meta("plan_complete") and archive.meta("layout", "url") != layout:
+        raise ValueError("An existing plan retains its original layout")
     source = Path(source).resolve(strict=True)
+    log_event(archive, "plan_start", layout=layout, source_bytes=source.stat().st_size)
     sha = digest_file(source)
     if archive.meta("source_sha256") and archive.meta("source_sha256") != sha:
         raise ValueError("A destination belongs to one immutable dump; select a new directory")
@@ -332,18 +367,64 @@ def plan(archive, source, evidence_db=None, allow_partial=False):
             raise ValueError("Plan already bound; use the same evidence input")
         return report(archive)
     with archive.db:
+        archive.db.execute("DELETE FROM pilot_assets")
         archive.db.execute("DELETE FROM occurrences")
         archive.db.execute("DELETE FROM placements")
         archive.db.execute("DELETE FROM assets")
         archive.db.execute("DELETE FROM nodes")
         archive.db.execute("DELETE FROM pages")
         archive.db.execute("DELETE FROM storage_assets")
+        archive.db.execute("DROP INDEX IF EXISTS idx_nodes_asset")
+        log_event(archive, "plan_tree_start")
         keys = stream_nodes(archive, saved, validator("node"))
+        log_event(archive, "plan_tree_index")
+        archive.db.execute("CREATE INDEX idx_nodes_asset ON nodes(asset_id,seq)")
         if set(schema["required"]) - keys or keys - set(schema["properties"]):
             raise ValueError("Missing or unsupported top-level inventory fields")
         if version == 1:
             stream_nodes(archive, saved, validator("node"), root="storage_tree")
+
+        @lru_cache(maxsize=8192)
+        def original_directory(sequence):
+            if sequence is None:
+                return "originals"
+            row = archive.db.execute(
+                "SELECT parent,node_id,name FROM nodes WHERE seq=?", (sequence,)
+            ).fetchone()
+            name = logical_component(row["name"])
+            # Preserve distinct logical directories even on case-insensitive disks.
+            name += "--" + hashlib.sha256(row["node_id"].encode()).hexdigest()[:8]
+            return str(Path(original_directory(row["parent"]), name))
+
+        def asset_path(asset_id, asset):
+            if layout == "url":
+                return original_path(asset_id, asset)
+            node = archive.db.execute(
+                "SELECT parent,name FROM nodes WHERE asset_id=? ORDER BY seq LIMIT 1", (asset_id,)
+            ).fetchone()
+            if node is None:
+                raise ValueError("Asset has no logical placement")
+            name = logical_component(node["name"])
+            path = str(Path(original_directory(node["parent"]), name))
+            if archive.db.execute(
+                "SELECT 1 FROM assets WHERE relative_path=? COLLATE NOCASE", (path,)
+            ).fetchone():
+                suffix = Path(name).suffix
+                stem = name[: -len(suffix)] if suffix else name
+                path = str(
+                    Path(
+                        original_directory(node["parent"]),
+                        stem + "--" + hashlib.sha256(asset_id.encode()).hexdigest()[:16] + suffix,
+                    )
+                )
+            if len(str(archive.root / path).encode()) >= 1000:
+                raise ValueError(
+                    "Logical original path exceeds the supported filesystem path length"
+                )
+            return path
+
         count = known = unknown = placements = pages = issues = checksum_count = 0
+        log_event(archive, "plan_pages_start")
         with saved.open("rb") as stream:
             for page in ijson.items(stream, "pages.item", use_float=True):
                 validator("page").validate(page)
@@ -355,6 +436,9 @@ def plan(archive, source, evidence_db=None, allow_partial=False):
                     raise ValueError("Certified inventory contains an unverified page")
                 archive.db.execute("INSERT INTO pages VALUES (?,?)", (page["page_id"], page["url"]))
                 pages += 1
+                if pages % 5000 == 0:
+                    log_event(archive, "plan_pages", pages=pages)
+        log_event(archive, "plan_assets_start")
         with saved.open("rb") as stream:
             for asset_id, asset in ijson.kvitems(stream, "assets", use_float=True):
                 validator("asset").validate(asset)
@@ -385,7 +469,7 @@ def plan(archive, source, evidence_db=None, allow_partial=False):
                         asset["url"],
                         json.dumps(asset),
                         asset["size_bytes"],
-                        original_path(asset_id, asset),
+                        asset_path(asset_id, asset),
                     ),
                 )
                 for occurrence in asset["occurrences"]:
@@ -404,6 +488,7 @@ def plan(archive, source, evidence_db=None, allow_partial=False):
                 known += asset["size_bytes"] or 0
                 if count % 5000 == 0:
                     archive.check()
+                    log_event(archive, "plan_assets", assets=count)
         with saved.open("rb") as stream:
             for issue in ijson.items(stream, "issues.item"):
                 Draft202012Validator(schema["properties"]["issues"]["items"]).validate(issue)
@@ -456,6 +541,7 @@ def plan(archive, source, evidence_db=None, allow_partial=False):
                 Path(directory_path(row["parent"]), component(row["name"] + "_" + row["node_id"]))
             )
 
+        log_event(archive, "plan_placements_start")
         for index, node in enumerate(
             archive.db.execute(
                 "SELECT seq,parent,node_id,name,asset_id FROM nodes WHERE kind='file'"
@@ -473,6 +559,7 @@ def plan(archive, source, evidence_db=None, allow_partial=False):
             )
             if index % 5000 == 0:
                 archive.check()
+        archive.set_meta("layout", layout)
         archive.set_meta("source_sha256", sha)
         archive.set_meta("source_metadata", metadata)
         archive.set_meta("source_validation", checks)
@@ -481,6 +568,7 @@ def plan(archive, source, evidence_db=None, allow_partial=False):
         archive.set_meta("plan_complete", True)
         archive.set_meta("schema_version", version)
         archive.set_meta("source_checksums_count", checksum_count)
+    log_event(archive, "plan_complete", assets=count, placements=placements, pages=pages)
     return report(archive)
 
 
@@ -510,4 +598,8 @@ def report(archive):
     result["complete_at_last_audit"] = bool(
         result["source_inventory_complete"] and result["download_complete"] and audit.get("passed")
     )
+    if archive.meta("pilot"):
+        from .archive_selection import pilot_status
+
+        result["pilot"] = pilot_status(archive)
     return validate_artifact("report", result)

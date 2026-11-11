@@ -6,6 +6,17 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Complete the authorized 250-PDF Data Set 1 pilot with normal age-confirmed
+  session access, matching source sizes/ETags, resumable stop and fresh scoped
+  SHA-256/PDF/placement audit. Record the external artifact locations and evidence.
+
+- Frozen first-in-tree download pilots with scoped fetch/audit, durable membership,
+  readable logical original paths, external event logs and ordinary browser-session
+  cookie-file support. Keep full-inventory completion distinct from pilot audits.
+- Bound native monitor recovery, compare strong inventory/response ETags, support
+  HTTP-date Retry-After and improve external-disk planning with a bounded SQLite
+  page cache and bulk-built node index.
+
 - Explicit adoption checks bind receipts to the same source snapshot, asset and
   original path, even when another receipt describes equal bytes.
 - Self-contained loopback archive/FCC test runner with inherited external-socket

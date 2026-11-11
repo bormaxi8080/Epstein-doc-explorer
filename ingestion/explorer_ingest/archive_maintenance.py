@@ -267,11 +267,11 @@ def restore(destination, source, reserve_bytes=1024**3):
     }
 
 
-def rebuild(archive, dump, receipts, options, allow_partial=False):
+def rebuild(archive, dump, receipts, options, allow_partial=False, layout=None):
     """Recreate a missing ledger only; caller must reserve the recovery lease."""
     if archive.meta("plan_complete"):
         raise ValueError("Rebuild requires a new/missing ledger")
-    result = plan(archive, dump, allow_partial=allow_partial)
+    result = plan(archive, dump, allow_partial=allow_partial, layout=layout)
     copied = 0
     for row in archive.db.execute("SELECT * FROM assets"):
         _, _, target = artifact_paths(archive, row)

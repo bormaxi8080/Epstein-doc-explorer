@@ -293,7 +293,7 @@ class HTTPFixture(ArchiveFixture):
                 owner.requests.append(dict(self.headers))
                 if owner.mode == "rate-limit" and len(owner.requests) == 1:
                     self.send_response(429)
-                    self.send_header("Retry-After", "0")
+                    self.send_header("Retry-After", getattr(owner, "retry_after", "0"))
                     self.end_headers()
                     return
                 if owner.mode == "server-error":

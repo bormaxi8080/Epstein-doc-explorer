@@ -123,7 +123,10 @@ behavior during forced device removal still governs physical durability.
 
 - Only configured hosts are allowed, including every redirect. HTTPS validation
   is enabled, HTTPS downgrades are rejected, and plain HTTP requires explicit
-  configuration. No browser cookies, proxy credentials or age-gate bypass is used.
+  configuration. Session cookies use the optional operator-supplied cookie file.
+- An optional absolute `cookie_file` setting loads a Netscape cookie jar obtained
+  through normal browser access/age confirmation. Cookie values stay outside Git,
+  reports and event logs. The downloader uses ordinary HTTP with that session.
 - Request identity encoding so received bytes can be compared with advertised
   sizes. Enforce per-file limits, socket timeout and remaining disk reserve.
 - A durable partial stores its own checked byte-prefix hash and strong ETag.
@@ -131,8 +134,8 @@ behavior during forced device removal still governs physical durability.
   or responses returning 200 cause a restart, never concatenation of versions.
   Invalid 206 ranges/ETags/lengths fail closed. 416 permits a bounded full restart.
 - Interrupted transfers retain durable progress. Retry transport failures and
-  selected 408/429/5xx responses at most the configured count; numeric Retry-After
-  is honored with a 30-second cap. There is one sequential worker and a configured
+  selected 408/429/5xx responses at most the configured count; numeric and HTTP-date Retry-After
+  are honored with a five-minute cap. There is one sequential worker and a configured
   pause between assets, avoiding an uncontrolled parallel download burst.
 - Check expected size and optional source SHA-256, reject HTML masquerading as
   binary data, validate content, then record a receipt and publish the original.
@@ -252,3 +255,115 @@ artifact contracts, bounded validators, crash tests, synthetic corpora/scale,
 `adopt-archive`, read-only `status --watch`, `doctor`, metadata backup/restore and
 missing-ledger recovery. Metadata backups exclude original payloads; restoring
 always requires a fresh full audit before adoption.
+
+
+## Fixed first-in-tree pilots and logical originals
+
+`plan --dump INPUT --layout logical` retains the complete authoritative input and
+validates its full registries while assigning original files to `originals/`
+under their first logical tree placement. Directory names retain readable labels
+with stable identity suffixes, unsafe characters are replaced, and filename
+collisions get asset suffixes. Every source placement retains its catalog
+reference. The existing default `--layout url` keeps URL-based originals.
+An existing plan retains its chosen layout.
+
+After planning, `pilot --first 250` freezes the first 250 unique assets in tree
+order. `.pw010-download/pilot.json` records ranks, IDs, paths, sizes and the source
+SHA-256. Repeating the same selection is idempotent. Membership stays fixed across
+failures and restarts. Fetch with `--pilot` to operate only on that membership.
+
+```bash
+.venv/bin/python scripts/download_archive.py --destination "$ARCHIVE_DESTINATION" \
+  --config "$ARCHIVE_CONFIG" plan --dump "$ARCHIVE_DUMP" --layout logical
+.venv/bin/python scripts/download_archive.py --destination "$ARCHIVE_DESTINATION" pilot --first 250
+.venv/bin/python scripts/download_archive.py --destination "$ARCHIVE_DESTINATION" \
+  --config "$ARCHIVE_CONFIG" fetch --pilot --limit 10
+.venv/bin/python scripts/download_archive.py --destination "$ARCHIVE_DESTINATION" \
+  --config "$ARCHIVE_CONFIG" fetch --pilot
+.venv/bin/python scripts/download_archive.py --destination "$ARCHIVE_DESTINATION" \
+  --config "$ARCHIVE_CONFIG" verify --pilot
+```
+
+`fetch --pilot` returns 0 when every selected asset is downloaded. `verify --pilot`
+returns 0 after a fresh successful audit of all selected assets and publishes
+`pilot-verified-files.jsonl`. Full-inventory totals and certification remain
+explicit in the report, alongside the separate `pilot` counters/audit. A bounded
+`verify --pilot --limit N` cannot pass its audit. Further fetch/quarantine clears
+the pilot audit and manifest. Full-corpus adoption still requires a full audit.
+
+New ledgers use 64 KiB SQLite pages for external-disk writes. The planner uses
+a bounded 256 MiB SQLite page cache and builds its asset-to-node index after tree
+import. Existing ledger page sizes are preserved. `events.jsonl` records planning stages, file attempts,
+completion, retry errors and verification progress, also emitted to stderr.
+Writer CLI commands set `TMPDIR` and `SQLITE_TMPDIR` to `.pw010-download/tmp`
+under the selected destination for disk-backed scratch. Ordinary originals, inputs, ledger, partials and receipts use that root.
+Validators retain their separate configured memory/time bounds. Transient native
+memory-monitor failures retry at most three times before a classified validation
+error. Strong response ETags are compared with strong inventory ETags when both
+are available, and the comparison is recorded in receipts.
+
+Rebuilding a lost logical-layout ledger uses `rebuild --layout logical` with the
+same source and receipts. Metadata restore invalidates prior audit results;
+perform a fresh `verify --pilot` for a restored pilot before using its files.
+
+Pilot summaries force membership-first joins so a small selection performs
+bounded indexed lookups instead of scanning the full registry. CLI progress
+callbacks make long SQLite statements interruptible by SIGINT/SIGTERM. Temporary
+directory environment settings and signal handlers are restored on return to
+embedded callers. Repeating `pilot --first N` regenerates a missing derived
+selection manifest from the durable ledger.
+
+`verify --pilot` checks the selected membership table and its foreign keys,
+the complete pinned JSON SHA-256, and every selected file/receipt/placement.
+The audit records `scope=pilot` and its ledger integrity scope. SQLite 3.33+
+supports the table-level integrity check; earlier SQLite falls back to the
+whole-ledger check. Full-corpus `verify` checks the complete ledger. The separate
+pilot result covers its frozen membership. SQLite documents table-level checks
+in [PRAGMA integrity_check](https://www.sqlite.org/pragma.html#pragma_integrity_check).
+
+
+## Authorized live pilot (2026-11-11)
+
+The operator authorized the first 250 files from the complete PW-010 1.0.42
+inventory at `/Volumes/Transcend/data/EA/doj_disclosures.json`. The independent
+output root is `/Volumes/Transcend/data/EA-download`. All copied inputs, SQLite,
+originals, partials, receipts, event logs and scratch reside on that external disk.
+
+- Source snapshot: `292e4f9c7dfd447097cf8522e405dae8`.
+- Source JSON SHA-256: `7e4791264d49dd256c1eaaf381e5da0764d2bc4d39f7fea56614abce740a47b8`.
+- Full offline plan: 1,396,719 unique assets, 1,396,720 placements and 27,980 pages.
+- Frozen pilot: `EFTA00000001.pdf` through `EFTA00000250.pdf` in Data Set 1.
+- Downloaded and independently rehashed: 250 files, exactly 110,614,300 bytes.
+- All 250 strong response ETags matched the inventory. All 250 PDF structure
+  checks passed. Transfer error events: zero.
+- A controlled SIGTERM after 25 completions returned a resumable pause. Those
+  first 25 assets retained one transfer attempt each after continuation.
+- Fresh `verify --pilot` completed at 2026-11-11 21:04:43 Asia/Almaty with
+  `passed=true`, `checked=250`, `failures=0`, `all_content_fully_checked=true`,
+  `scope=pilot` and `ledger_integrity_scope=pilot_assets`.
+- Verified JSONL SHA-256: `687aeeebbe50700ead14662a2e4cdb7486e535698eb65757e92a822ea0714262`.
+
+DOJ initially redirected the ordinary client to its age-confirmation page. A
+normal Chrome confirmation produced an operator-authorized session, exported as
+a private Netscape cookie file outside Git. The HTTP downloader then acquired
+the originals. Cookie values are excluded from this record and event logs.
+
+The live run exposed external-disk costs of small SQLite pages, an unbounded
+join order for pilot summaries and whole-registry preflight in a scoped audit.
+The delivered page/cache/index settings, membership-first joins and explicit
+pilot integrity scope address those paths. Full archive verification retains
+whole-ledger integrity checks. Directory labels carry stable suffixes and each
+PDF retains its original filename. The external root holds about 6.69 GB including
+the 1.65 GB pinned JSON, 4.93 GB ledger and 110.61 MB of original PDFs.
+
+Final offline verification: 86 synthetic tests passed with external sockets
+blocked. Ruff lint, formatting and Git whitespace checks passed. Local fixtures
+cover HTTP failures, range resume, session transmission, scope/order, ledger
+recovery, operator stop, native monitor recovery and audit invalidation. The
+real interruption test establishes fixed-selection continuation. Real-source
+nonempty Range/If-Range response behavior remains outside this pilot evidence.
+
+Operator results are `verify-result.json`, `.pw010-download/report.json`,
+`.pw010-download/pilot.json`, `.pw010-download/pilot-verified-files.jsonl` and
+`.pw010-download/events.jsonl` under the selected root. The input path is an
+independent `--dump` argument and output is an independent `--destination`.

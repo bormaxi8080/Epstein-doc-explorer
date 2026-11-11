@@ -13,9 +13,23 @@ assumptions:
     status: unknown
     claim: A real source provides a strong ETag and honors If-Range with correct Content-Range.
     reason: This is explicitly optional; the caller restarts if the source returns 200 or no strong validator.
-    verification: The actual DOJ archive has not been requested. A local stand-in models only the contract under test.
+    verification: Initial verification on 2026-11-02 used a local stand-in. The authorized 2026-11-11 pilot acquired 250 originals with a normal age-confirmed browser session and verified fixed-selection continuation after an operator stop. Nonempty real-source Range/If-Range behavior retains its unknown status. Local fixtures exercise that response contract.
     source: ingestion/explorer_ingest/archive_transfer.py; postman/mocks/archive/default.js
-    updated_at: '2026-11-02'
+    updated_at: '2026-11-11'
+  - id: frozen-pilot-and-session-regressions
+    status: supported
+    claim: The downloader keeps a first-in-tree selection fixed across pauses, uses an explicit session cookie file, and audits the selected files with an explicit pilot scope.
+    reason: The real downloader and SQLite/filesystem state were exercised against local HTTP stand-ins with external connections blocked.
+    verification: On 2026-11-11, 86 synthetic tests passed. Cases include cookie transmission without value logging, source ETag changes, HTTP-date Retry-After, selection order, CLI continuation, logical path collisions, native monitor recovery, SQL cancellation and interrupted-audit invalidation.
+    source: ingestion/tests/test_archive_pilot.py, scripts/check_offline.py, ingestion/explorer_ingest/archive_transfer.py
+    updated_at: '2026-11-11'
+  - id: authorized-source-first-250
+    status: supported
+    claim: The authorized first 250 Data Set 1 originals were acquired with matching inventory sizes and strong ETags and passed a fresh scoped local audit.
+    reason: Real source GETs, receipts, originals and the independently rehashed verified JSONL agree for this frozen selection.
+    verification: On 2026-11-11, EFTA00000001.pdf through EFTA00000250.pdf totaled 110614300 bytes with zero transfer errors. A normal Chrome age confirmation supplied a private cookie file. The pilot audit checked all 250 PDFs with zero failures. Scope is the recorded snapshot and selection.
+    source: docs/archive-downloader.md, external pilot receipts and verify-result.json under the operator-selected destination
+    updated_at: '2026-11-11'
 fingerprints:
   - id: standalone-downloader
     date: '2026-11-02'
@@ -25,3 +39,7 @@ fingerprints:
     date: '2026-11-03'
     commit: downloader changes over 87e98135; dirty tree during verification
     cli: Postman 1.73.0
+  - id: authorized-pilot-20261111
+    date: '2026-11-11'
+    commit: pilot changes over 40e49833, dirty tree during verification
+    cli: repository offline harness with existing Node stand-ins and Python 3.12

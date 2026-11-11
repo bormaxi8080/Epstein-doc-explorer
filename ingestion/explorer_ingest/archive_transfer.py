@@ -3,11 +3,13 @@
 import codecs
 import hashlib
 import http.client
+import http.cookiejar
 import json
 import math
 import os
 import re
 import shutil
+import sqlite3
 import sys
 import time
 import urllib.error
@@ -15,7 +17,8 @@ import urllib.request
 import zipfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from pathlib import PurePosixPath
+from email.utils import parsedate_to_datetime
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
 from pypdf.errors import PyPdfError
@@ -25,12 +28,14 @@ from .archive_catalog import (
     StorageUnavailable,
     artifact_json,
     atomic_json,
+    log_event,
     report,
     sync_directory,
 )
 from .archive_contracts import read_artifact, validate_artifact
 from .archive_faults import boundary
 from .archive_limits import ValidationBudgetError, run_limited
+from .archive_selection import asset_rows, pilot_status
 from .state import digest_file
 from .transport import tls_context
 
@@ -58,8 +63,13 @@ class Options:
     max_zip_members: int = 1000000
     validation_timeout: float = 30
     validation_memory_mb: int = 512
+    cookie_file: str | None = None
 
     def __post_init__(self):
+        if self.cookie_file is not None and (
+            not isinstance(self.cookie_file, str) or not Path(self.cookie_file).is_absolute()
+        ):
+            raise ValueError("cookie_file must be an absolute Netscape cookie-file path")
         if (
             not isinstance(self.allow_hosts, (tuple, list))
             or not self.allow_hosts
@@ -368,9 +378,12 @@ def receive(archive, row, options):
                 raise IntegrityError("HTTPS downgrade rejected")
             return super().redirect_request(request, fp, code, msg, response_headers, newurl)
 
-    opener = urllib.request.build_opener(
-        Redirect(), urllib.request.HTTPSHandler(context=tls_context())
-    )
+    handlers = [Redirect(), urllib.request.HTTPSHandler(context=tls_context())]
+    if options.cookie_file:
+        cookies = http.cookiejar.MozillaCookieJar(options.cookie_file)
+        cookies.load(ignore_discard=True)
+        handlers.append(urllib.request.HTTPCookieProcessor(cookies))
+    opener = urllib.request.build_opener(*handlers)
     with opener.open(
         urllib.request.Request(url, headers=headers), timeout=options.timeout
     ) as response:
@@ -380,6 +393,16 @@ def receive(archive, row, options):
         length = response.headers.get("Content-Length")
         length = int(length) if length is not None else None
         new_etag = response.headers.get("ETag")
+        source_etag = metadata.get("etag")
+        if (
+            source_etag
+            and source_etag.startswith('"')
+            and source_etag.endswith('"')
+            and new_etag
+            and new_etag.startswith('"')
+            and new_etag != source_etag
+        ):
+            raise IntegrityError("Source ETag differs from inventory")
         if response.status == 206:
             match = re.fullmatch(
                 r"bytes (\d+)-(\d+)/(\d+)", response.headers.get("Content-Range", "")
@@ -490,6 +513,9 @@ def receive(archive, row, options):
             "downloaded_at": utc_now(),
             "content_validation": content,
             "source_checksum_verified": bool(metadata.get("sha256")),
+            "source_etag_verified": bool(
+                source_etag and not source_etag.startswith("W/") and source_etag == new_etag
+            ),
         }
     archive.check()
     # Receipt first: a crash before/after rename is reconciled without a second GET.
@@ -503,19 +529,29 @@ def receive(archive, row, options):
     sidecar.unlink(missing_ok=True)
 
 
-def fetch(archive, options, limit=0, allow_partial=False):
+def fetch(archive, options, limit=0, allow_partial=False, pilot=False):
     archive.ready()
     if not archive.meta("source_certified") and not allow_partial:
         raise ValueError("Fetching a pilot partial plan requires --allow-partial")
     with archive.db:
         archive.set_meta("last_full_audit", None)
+        archive.set_meta("pilot_audit", None)
     archive.path(f"{CONTROL}/verified-files.jsonl").unlink(missing_ok=True)
-    rows = archive.db.execute("SELECT * FROM assets WHERE status!='downloaded' ORDER BY id")
+    archive.path(f"{CONTROL}/pilot-verified-files.jsonl").unlink(missing_ok=True)
+    log_event(archive, "fetch_start", pid=os.getpid(), pilot=pilot, limit=limit)
+    rows = asset_rows(archive, pilot=pilot, pending=True)
     processed = 0
     for row in rows:
         if limit and processed >= limit:
             break
         archive.check()
+        log_event(
+            archive,
+            "file_start",
+            asset_id=row["id"],
+            expected_bytes=row["expected_bytes"],
+            relative_path=row["relative_path"],
+        )
         try:
             recovered = recover_publication(archive, row, options)
         except (OSError, ValueError) as exc:
@@ -539,6 +575,9 @@ def fetch(archive, options, limit=0, allow_partial=False):
                 )
             try:
                 receive(archive, row, options)
+                log_event(
+                    archive, "file_downloaded", asset_id=row["id"], bytes=row["expected_bytes"]
+                )
                 break
             except StorageUnavailable:
                 raise
@@ -557,6 +596,16 @@ def fetch(archive, options, limit=0, allow_partial=False):
                     value = exc.headers.get("Retry-After", "")
                     if value.isdigit():
                         delay = float(value)
+                    elif value:
+                        try:
+                            delay = max(
+                                0,
+                                (
+                                    parsedate_to_datetime(value) - datetime.now(timezone.utc)
+                                ).total_seconds(),
+                            )
+                        except (ValueError, TypeError, OverflowError):
+                            pass
                     if exc.code == 416:
                         artifact_paths(archive, row)[1].unlink(missing_ok=True)
                     exc.close()
@@ -567,33 +616,57 @@ def fetch(archive, options, limit=0, allow_partial=False):
                         "UPDATE assets SET status='failed',error=? WHERE id=?",
                         (safe_error(exc), row["id"]),
                     )
+                log_event(
+                    archive,
+                    "file_error",
+                    asset_id=row["id"],
+                    attempt=attempt + 1,
+                    error=safe_error(exc),
+                    retrying=bool(retryable and attempt < options.retries),
+                )
                 if not retryable or attempt == options.retries:
                     break
-                time.sleep(min(delay, 30))
+                time.sleep(min(delay, 300))
         processed += 1
         if options.request_delay:
             time.sleep(options.request_delay)
     return report(archive)
 
 
-def verify(archive, options, limit=0):
+def verify(archive, options, limit=0, pilot=False):
     archive.ready()
+    log_event(archive, "verification_ledger_start", pilot=pilot)
+    # A pilot certifies its selected records/files. Full-corpus audits inspect
+    # every ledger table. Older SQLite versions retain the full-check fallback.
+    scoped_integrity = pilot and sqlite3.sqlite_version_info >= (3, 33, 0)
+    integrity_sql = (
+        "PRAGMA integrity_check('pilot_assets')" if scoped_integrity else "PRAGMA quick_check"
+    )
+    foreign_keys_sql = (
+        "PRAGMA foreign_key_check('pilot_assets')"
+        if scoped_integrity
+        else "PRAGMA foreign_key_check"
+    )
     if (
-        archive.db.execute("PRAGMA quick_check").fetchone()[0] != "ok"
-        or archive.db.execute("PRAGMA foreign_key_check").fetchone()
+        archive.db.execute(integrity_sql).fetchone()[0] != "ok"
+        or archive.db.execute(foreign_keys_sql).fetchone()
     ):
         raise IntegrityError("Download ledger failed SQLite integrity checks")
+    log_event(archive, "verification_source_start", pilot=pilot)
     source = archive.path(f"{CONTROL}/inputs/{archive.meta('source_sha256')}.json")
     if digest_file(source) != archive.meta("source_sha256"):
         raise IntegrityError("Stored source inventory checksum mismatch")
     with archive.db:
         archive.set_meta("last_full_audit", None)
+        archive.set_meta("pilot_audit", None)
+    log_event(archive, "verification_files_start", pilot=pilot)
     failures = checked = fully_checked = 0
-    manifest = archive.path(f"{CONTROL}/verified-files.jsonl")
+    manifest_name = "pilot-verified-files.jsonl" if pilot else "verified-files.jsonl"
+    manifest = archive.path(f"{CONTROL}/{manifest_name}")
     manifest.unlink(missing_ok=True)
     temporary = manifest.with_suffix(".tmp")
     with temporary.open("w", encoding="utf-8") as output:
-        for row in archive.db.execute("SELECT * FROM assets ORDER BY id"):
+        for row in asset_rows(archive, pilot=pilot):
             if limit and checked >= limit:
                 break
             storage_check(archive, options)
@@ -657,9 +730,21 @@ def verify(archive, options, limit=0):
                         (safe_error(exc), row["id"]),
                     )
             checked += 1
+            if checked % 10 == 0:
+                log_event(
+                    archive,
+                    "verification_progress",
+                    checked=checked,
+                    failures=failures,
+                    pilot=pilot,
+                )
         output.flush()
         os.fsync(output.fileno())
-    total = archive.db.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+    total = (
+        pilot_status(archive)["total"]
+        if pilot
+        else archive.db.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+    )
     passed = not limit and checked == total and not failures
     if passed:
         temporary.replace(manifest)
@@ -670,7 +755,7 @@ def verify(archive, options, limit=0):
         manifest.unlink(missing_ok=True)
     with archive.db:
         archive.set_meta(
-            "last_full_audit",
+            "pilot_audit" if pilot else "last_full_audit",
             {
                 "at": utc_now(),
                 "passed": passed,
@@ -678,6 +763,9 @@ def verify(archive, options, limit=0):
                 "failures": failures,
                 "all_content_fully_checked": fully_checked == total,
                 "manifest_sha256": digest_file(manifest) if passed else None,
+                "source_sha256": archive.meta("source_sha256"),
+                "scope": "pilot" if pilot else "archive",
+                "ledger_integrity_scope": "pilot_assets" if scoped_integrity else "archive",
             },
         )
     return report(archive)
@@ -712,7 +800,9 @@ def quarantine(archive, asset_id):
             (asset_id,),
         )
         archive.set_meta("last_full_audit", None)
+        archive.set_meta("pilot_audit", None)
     archive.path(f"{CONTROL}/verified-files.jsonl").unlink(missing_ok=True)
+    archive.path(f"{CONTROL}/pilot-verified-files.jsonl").unlink(missing_ok=True)
     return {
         "asset_id": asset_id,
         "status": "pending",
