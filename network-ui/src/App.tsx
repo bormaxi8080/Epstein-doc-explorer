@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { DocumentCatalogue } from './components/DocumentCatalogue';
 import NetworkGraph from './components/NetworkGraph';
 import Sidebar from './components/Sidebar';
 import RightSidebar from './components/RightSidebar';
@@ -8,6 +9,7 @@ import { fetchStats, fetchRelationships, fetchActorRelationships, fetchTagCluste
 import type { Stats, Relationship, TagCluster } from './types';
 
 function App() {
+  const [showCatalogue, setShowCatalogue] = useState(false);
   // Detect if mobile on initial load (lg breakpoint is 1024px in Tailwind)
   const isMobile = window.innerWidth < 1024;
 
@@ -149,6 +151,8 @@ function App() {
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
+      <button className="fixed top-3 right-3 z-40 bg-gray-700 p-2 rounded" onClick={() => setShowCatalogue(true)}>Documents</button>
+      {showCatalogue && <DocumentCatalogue onClose={() => setShowCatalogue(false)} />}
       {/* Desktop Sidebar - hidden on mobile */}
       <div className="hidden lg:block">
         <Sidebar

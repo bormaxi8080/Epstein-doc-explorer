@@ -6,6 +6,10 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 13: immutable compatible TXT/SQLite/FTS export, page provenance,
+  evidence and document catalogue UI, including zero-edge documents. SQL filters
+  precede bounded relationship results; remove hardcoded archive date exclusions.
+
 - Corpus stage 12: disk-backed graph distances, stable cluster assignments, cached
   semantic tag proposals and reviewed aliases with document-scoped unknowns.
 

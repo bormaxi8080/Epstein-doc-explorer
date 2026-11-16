@@ -33,7 +33,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 10 | Canonical text and page maps | Implemented |
 | 11 | Chunk analysis and document assembly | Implemented |
 | 12 | Tags, entities and graph | Implemented |
-| 13 | Compatible export, API and UI | Pending |
+| 13 | Compatible export, API and UI | Implemented |
 | 14 | Other formats and scale validation | Pending |
 | 15 | Bounded full-corpus operation | Pending |
 
@@ -146,3 +146,20 @@ reviewed reasons, reject cycles, and cannot merge unknown/redacted identities.
 Adjacency and BFS frontiers use SQLite temporary tables with disk-backed temp
 storage under the corpus root. No full graph is loaded into Python memory.
 Disconnected entities retain the legacy hop-distance sentinel 1000.
+
+## Explorer compatibility
+
+`export_corpus` writes a new external immutable bundle from the unchanged baseline.
+Canonical TXT is streamed into `documents.full_text` (Python 3.11+ blob I/O for
+large documents). IDs, legacy fields/JSON arrays and the 30 original cluster IDs
+remain compatible. Page text/provenance, evidence and FTS5 are additive tables.
+The default export selects approved versions; explicit private exports retain
+pending OCR/analysis and show review status. No original payloads are published.
+
+The catalogue searches text and paginates all documents, including zero-edge
+documents. Page/evidence endpoints and the catalogue UI keep responses bounded;
+legacy text is a 200,000-character preview. Relationship predicates now run in
+SQLite before LIMIT, removing the silent 100,000-row pre-filter cap and fixed
+1970–2025 exclusion. Result limits count triples, with explicit hasMore metadata;
+the old density-based edge selection is replaced by stable date/ID ordering.
+No claim of complete interactive recall applies to a bounded graph window.

@@ -142,7 +142,7 @@ function validateYearRange(yearMin: any, yearMax: any): [number, number] | null 
   const max = parseInt(yearMax);
 
   if (isNaN(min) || isNaN(max)) return null;
-  if (min < 1970 || max > 2025 || min > max) return null;
+  if (min < 1 || max > 9999 || min > max) return null;
 
   return [min, max];
 }
@@ -164,407 +164,61 @@ function validateMaxHops(maxHops: any): number | null {
   return parsed;
 }
 
-// BM25 scoring function for fuzzy text matching
-function calculateBM25Score(text: string, keywords: string[]): number {
-  if (!text || keywords.length === 0) return 0;
-
-  const textLower = text.toLowerCase();
-  const words = textLower.split(/\s+/);
-  const docLength = words.length;
-  const avgDocLength = 100; // Approximate average document length
-
-  // BM25 parameters
-  const k1 = 1.2; // Term frequency saturation parameter
-  const b = 0.75; // Length normalization parameter
-
-  let score = 0;
-
-  keywords.forEach(keyword => {
-    // Count term frequency in document
-    const tf = words.filter(word => word.includes(keyword)).length;
-    if (tf === 0) return;
-
-    // Simplified IDF (inverse document frequency) - assume keyword appears in 10% of docs
-    const idf = Math.log(10);
-
-    // BM25 formula
-    const numerator = tf * (k1 + 1);
-    const denominator = tf + k1 * (1 - b + b * (docLength / avgDocLength));
-
-    score += idf * (numerator / denominator);
-  });
-
-  return score;
+// SQL predicates run before the bounded result window; no archive-sized JS graph.
+function relationships(req: express.Request, res: express.Response, actor?: string) {
+  try {
+    const params: any[] = [];
+    const predicates = ['1=1'];
+    const joins = `FROM rdf_triples rt
+      LEFT JOIN entity_aliases ea_actor ON ea_actor.original_name=rt.actor
+      LEFT JOIN entity_aliases ea_target ON ea_target.original_name=rt.target
+      LEFT JOIN documents d ON d.doc_id=rt.doc_id`;
+    if (actor) {
+      if (actor.length > 300) return res.status(400).json({error: 'Actor name too long'});
+      predicates.push('(COALESCE(ea_actor.canonical_name,rt.actor)=? OR COALESCE(ea_target.canonical_name,rt.target)=?)');
+      params.push(actor,actor);
+    }
+    const baseWhere=predicates.join(' AND '), baseParams=[...params];
+    const categories=validateCategories(req.query.categories);
+    if (categories.length) {predicates.push(`d.category IN (${categories.map(()=>'?').join(',')})`);params.push(...categories);}
+    const years=validateYearRange(req.query.yearMin,req.query.yearMax);
+    if (years) {
+      predicates.push(`(rt.timestamp BETWEEN ? AND ? ${req.query.includeUndated !== 'false' ? 'OR rt.timestamp IS NULL' : ''})`);
+      params.push(`${String(years[0]).padStart(4,'0')}-01-01`,`${String(years[1]).padStart(4,'0')}-12-31`);
+    } else if (req.query.includeUndated === 'false') predicates.push('rt.timestamp IS NOT NULL');
+    const clusters=validateClusterIds(req.query.clusters);
+    if (clusters.length) {
+      const normalized=!!db.prepare("SELECT 1 FROM sqlite_master WHERE name='triple_clusters'").get();
+      predicates.push(normalized ? `EXISTS (SELECT 1 FROM triple_clusters tc WHERE tc.triple_id=rt.id AND tc.cluster_id IN (${clusters.map(()=>'?').join(',')}))` :
+        `EXISTS (SELECT 1 FROM json_each(COALESCE(rt.top_cluster_ids,'[]')) tc WHERE tc.value IN (${clusters.map(()=>'?').join(',')}))`);
+      params.push(...clusters);
+    }
+    const keywords=validateKeywords(req.query.keywords);
+    if (keywords.length) {
+      predicates.push('('+keywords.map(()=>"instr(lower(rt.actor||' '||rt.action||' '||rt.target||' '||COALESCE(rt.location,'')),?)>0").join(' OR ')+')');
+      params.push(...keywords);
+    }
+    const hops=validateMaxHops(req.query.maxHops);
+    if (hops!==null) {
+      for (const role of ['actor','target']) {
+        predicates.push(`EXISTS (SELECT 1 FROM canonical_entities ce WHERE ce.canonical_name=COALESCE(ea_${role}.canonical_name,rt.${role}) AND ce.hop_distance_from_principal<=?)`);
+        params.push(hops);
+      }
+    }
+    const where=predicates.join(' AND ');
+    const total=(db.prepare(`SELECT COUNT(*) AS n ${joins} WHERE ${where}`).get(...params) as {n:number}).n;
+    const all=(db.prepare(`SELECT COUNT(*) AS n ${joins} WHERE ${baseWhere}`).get(...baseParams) as {n:number}).n;
+    const limit=validateLimit(req.query.limit);
+    const offset=Math.max(0,Math.min(100000000,Number(req.query.offset)||0));
+    const rows=db.prepare(`SELECT rt.id,rt.doc_id,rt.timestamp,COALESCE(ea_actor.canonical_name,rt.actor) AS actor,
+      rt.action,COALESCE(ea_target.canonical_name,rt.target) AS target,rt.location,rt.triple_tags,rt.top_cluster_ids
+      ${joins} WHERE ${where} ORDER BY rt.timestamp,rt.id LIMIT ? OFFSET ?`).all(...params,limit,offset) as any[];
+    res.json({relationships:rows.map(({triple_tags,...r})=>({...r,tags:JSON.parse(triple_tags||'[]')})),
+      totalBeforeLimit:total,totalBeforeFilter:all,hasMore:offset+rows.length<total,limit,offset});
+  } catch (error) {console.error('Relationship query failed',error);res.status(500).json({error:'Relationship query failed'});}
 }
-
-// No longer needed - we use the materialized top_cluster_ids column instead
-
-// Get all relationships (edges) with distance-based pruning
-app.get('/api/relationships', (req, res) => {
-  try {
-    const limit = validateLimit(req.query.limit);
-    const clusterIds = validateClusterIds(req.query.clusters);
-    const categories = validateCategories(req.query.categories);
-    const yearRange = validateYearRange(req.query.yearMin, req.query.yearMax);
-    const includeUndated = req.query.includeUndated !== 'false'; // Default to true
-    const keywords = validateKeywords(req.query.keywords);
-    const maxHops = validateMaxHops(req.query.maxHops);
-    const EPSTEIN_NAME = 'Jeffrey Epstein';
-
-    // Build set of selected cluster IDs for filtering
-    const selectedClusterIds = new Set<number>(clusterIds);
-    const selectedCategories = new Set<string>(categories);
-
-    // Build WHERE clause for categories
-    let categoryWhere = '';
-    let categoryParams: string[] = [];
-    if (selectedCategories.size > 0) {
-      const placeholders = Array.from(selectedCategories).map(() => '?').join(',');
-      categoryWhere = `AND d.category IN (${placeholders})`;
-      categoryParams = Array.from(selectedCategories);
-    }
-
-    // Build WHERE clause for year range
-    let yearWhere = '';
-    let yearParams: string[] = [];
-    if (yearRange) {
-      const [minYear, maxYear] = yearRange;
-      if (includeUndated) {
-        yearWhere = `AND (rt.timestamp IS NULL OR (CAST(substr(rt.timestamp, 1, 4) AS INTEGER) >= ? AND CAST(substr(rt.timestamp, 1, 4) AS INTEGER) <= ?))`;
-      } else {
-        yearWhere = `AND (rt.timestamp IS NOT NULL AND CAST(substr(rt.timestamp, 1, 4) AS INTEGER) >= ? AND CAST(substr(rt.timestamp, 1, 4) AS INTEGER) <= ?)`;
-      }
-      yearParams = [minYear.toString(), maxYear.toString()];
-    }
-
-    // Build WHERE clause for hop distance using canonical_entities table
-    let hopJoins = '';
-    let hopWhere = '';
-    let hopParams: number[] = [];
-    if (maxHops !== null) {
-      hopJoins = `
-      LEFT JOIN canonical_entities ce_actor ON COALESCE(ea_actor.canonical_name, rt.actor) = ce_actor.canonical_name
-      LEFT JOIN canonical_entities ce_target ON COALESCE(ea_target.canonical_name, rt.target) = ce_target.canonical_name`;
-      hopWhere = `AND ce_actor.hop_distance_from_principal <= ?
-                  AND ce_target.hop_distance_from_principal <= ?`;
-      hopParams = [maxHops, maxHops];
-    }
-
-    // Fetch relationships with alias resolution and triple_tags
-    // Apply database-level LIMIT to prevent memory exhaustion
-    const MAX_DB_LIMIT = 100000; // Maximum rows to fetch from database
-    const allRelationships = db.prepare(`
-      SELECT
-        rt.id,
-        rt.doc_id,
-        rt.timestamp,
-        COALESCE(ea_actor.canonical_name, rt.actor) as actor,
-        rt.action,
-        COALESCE(ea_target.canonical_name, rt.target) as target,
-        rt.location,
-        rt.triple_tags,
-        rt.top_cluster_ids
-      FROM rdf_triples rt
-      LEFT JOIN entity_aliases ea_actor ON rt.actor = ea_actor.original_name
-      LEFT JOIN entity_aliases ea_target ON rt.target = ea_target.original_name
-      ${hopJoins}
-      LEFT JOIN documents d ON rt.doc_id = d.doc_id
-      WHERE (rt.timestamp IS NULL OR rt.timestamp >= '1970-01-01')
-      ${categoryWhere}
-      ${yearWhere}
-      ${hopWhere}
-      ORDER BY rt.timestamp
-      LIMIT ?
-    `).all(...categoryParams, ...yearParams, ...hopParams, MAX_DB_LIMIT) as Array<{
-      id: number;
-      doc_id: string;
-      timestamp: string | null;
-      actor: string;
-      action: string;
-      target: string;
-      location: string | null;
-      triple_tags: string | null;
-      top_cluster_ids: string | null;
-    }>;
-
-    // Filter by tag clusters if specified
-    let filteredRelationships = allRelationships.filter(rel => {
-      if (selectedClusterIds.size === 0) return true; // No filter
-
-      try {
-        // Use the materialized top_cluster_ids column
-        const topClusters = rel.top_cluster_ids ? JSON.parse(rel.top_cluster_ids) : [];
-        // Include if any of the top 3 clusters are selected
-        return topClusters.some((clusterId: number) => selectedClusterIds.has(clusterId));
-      } catch {
-        return false;
-      }
-    });
-
-    // Filter by keywords using BM25 fuzzy matching if specified
-    if (keywords.length > 0) {
-      filteredRelationships = filteredRelationships.filter(rel => {
-        // Build searchable text from relationship fields
-        const searchText = `${rel.actor} ${rel.action} ${rel.target} ${rel.location || ''}`;
-        const score = calculateBM25Score(searchText, keywords);
-        // Include relationships with non-zero BM25 score (at least one keyword match)
-        return score > 0;
-      });
-    }
-
-    // Build adjacency list for BFS
-    const adjacency = new Map<string, Set<string>>();
-
-    filteredRelationships.forEach(rel => {
-      if (!adjacency.has(rel.actor)) adjacency.set(rel.actor, new Set());
-      if (!adjacency.has(rel.target)) adjacency.set(rel.target, new Set());
-      adjacency.get(rel.actor)!.add(rel.target);
-      adjacency.get(rel.target)!.add(rel.actor);
-    });
-
-    // BFS to calculate distances from Jeffrey Epstein
-    const distances = new Map<string, number>();
-    const queue: string[] = [];
-
-    if (adjacency.has(EPSTEIN_NAME)) {
-      distances.set(EPSTEIN_NAME, 0);
-      queue.push(EPSTEIN_NAME);
-
-      while (queue.length > 0) {
-        const current = queue.shift()!;
-        const currentDistance = distances.get(current)!;
-
-        const neighbors = adjacency.get(current) || new Set();
-        neighbors.forEach(neighbor => {
-          if (!distances.has(neighbor)) {
-            distances.set(neighbor, currentDistance + 1);
-            queue.push(neighbor);
-          }
-        });
-      }
-    }
-
-    // First, deduplicate edges by grouping relationships between same actor pairs
-    const edgeMap = new Map<string, any[]>();
-
-    filteredRelationships.forEach(rel => {
-      const edgeKey = `${rel.actor}|||${rel.target}`;
-      if (!edgeMap.has(edgeKey)) {
-        edgeMap.set(edgeKey, []);
-      }
-      edgeMap.get(edgeKey)!.push(rel);
-    });
-
-    // Convert to array of unique edges (each edge represents all relationships between that pair)
-    const uniqueEdges = Array.from(edgeMap.entries()).map(([key, rels]) => ({
-      edgeKey: key,
-      relationships: rels,
-      // Use first relationship as representative
-      representative: rels[0]
-    }));
-
-    // Calculate node degrees based on UNIQUE edges
-    const nodeDegrees = new Map<string, number>();
-    uniqueEdges.forEach(edge => {
-      const rel = edge.representative;
-      nodeDegrees.set(rel.actor, (nodeDegrees.get(rel.actor) || 0) + 1);
-      nodeDegrees.set(rel.target, (nodeDegrees.get(rel.target) || 0) + 1);
-    });
-
-    // Assign density score to each unique edge
-    const edgesWithDensity = uniqueEdges.map(edge => {
-      const rel = edge.representative;
-      const actorDegree = nodeDegrees.get(rel.actor) || 0;
-      const targetDegree = nodeDegrees.get(rel.target) || 0;
-      const densityScore = actorDegree + targetDegree;
-
-      return {
-        ...edge,
-        _density: densityScore
-      };
-    });
-
-    // Sort unique edges by density (highest first) and take top limit
-    edgesWithDensity.sort((a, b) => b._density - a._density);
-    const prunedEdges = edgesWithDensity.slice(0, limit);
-
-    // Expand back to all relationships for the kept edges
-    const prunedRelationships = prunedEdges.flatMap(edge => edge.relationships);
-
-    // Parse tags before sending
-    const relationships = prunedRelationships.map(({ triple_tags, ...rel }) => ({
-      ...rel,
-      tags: triple_tags ? JSON.parse(triple_tags) : []
-    }));
-
-    // Return both the relationships and metadata
-    res.json({
-      relationships,
-      totalBeforeLimit: uniqueEdges.length, // Count of unique edges, not total triples
-      totalBeforeFilter: allRelationships.length
-    });
-  } catch (error) {
-    console.error('Error in /api/relationships:', error);
-    res.status(500).json({ error: 'An internal error occurred' });
-  }
-});
-
-// Get relationships for specific actor with alias resolution and cluster filtering
-app.get('/api/actor/:name/relationships', (req, res) => {
-  try {
-    const { name } = req.params;
-
-    // Validate actor name
-    if (!name || name.length > 200) {
-      return res.status(400).json({ error: 'Invalid actor name' });
-    }
-
-    const clusterIds = validateClusterIds(req.query.clusters);
-    const categories = validateCategories(req.query.categories);
-    const yearRange = validateYearRange(req.query.yearMin, req.query.yearMax);
-    const includeUndated = req.query.includeUndated !== 'false'; // Default to true
-    const keywords = validateKeywords(req.query.keywords);
-    const maxHops = validateMaxHops(req.query.maxHops);
-
-    // Build set of selected cluster IDs and categories for filtering
-    const selectedClusterIds = new Set<number>(clusterIds);
-    const selectedCategories = new Set<string>(categories);
-
-    // Find all aliases for this name (if it's a canonical name)
-    // OR find the canonical name if this is an alias
-    const aliasQuery = db.prepare(`
-      SELECT original_name FROM entity_aliases WHERE canonical_name = ?
-      UNION
-      SELECT canonical_name FROM entity_aliases WHERE original_name = ?
-      UNION
-      SELECT ? as name
-    `).all(name, name, name);
-
-    const allNames = aliasQuery.map((row: any) => row.original_name || row.canonical_name || row.name);
-    const placeholders = allNames.map(() => '?').join(',');
-
-    // First, get the total count WITHOUT any filters (for the "X of Y" display)
-    const totalRelationships = db.prepare(`
-      SELECT COUNT(*) as count
-      FROM rdf_triples rt
-      WHERE (rt.actor IN (${placeholders}) OR rt.target IN (${placeholders}))
-        AND (rt.timestamp IS NULL OR rt.timestamp >= '1970-01-01')
-    `).get(...allNames, ...allNames) as { count: number };
-
-    // Build WHERE clause for categories
-    let categoryWhere = '';
-    let categoryParams: string[] = [];
-    if (selectedCategories.size > 0) {
-      const catPlaceholders = Array.from(selectedCategories).map(() => '?').join(',');
-      categoryWhere = `AND d.category IN (${catPlaceholders})`;
-      categoryParams = Array.from(selectedCategories);
-    }
-
-    // Build WHERE clause for year range
-    let yearWhere = '';
-    let yearParams: string[] = [];
-    if (yearRange) {
-      const [minYear, maxYear] = yearRange;
-      if (includeUndated) {
-        yearWhere = `AND (rt.timestamp IS NULL OR (CAST(substr(rt.timestamp, 1, 4) AS INTEGER) >= ? AND CAST(substr(rt.timestamp, 1, 4) AS INTEGER) <= ?))`;
-      } else {
-        yearWhere = `AND (rt.timestamp IS NOT NULL AND CAST(substr(rt.timestamp, 1, 4) AS INTEGER) >= ? AND CAST(substr(rt.timestamp, 1, 4) AS INTEGER) <= ?)`;
-      }
-      yearParams = [minYear.toString(), maxYear.toString()];
-    }
-
-    // Build WHERE clause for hop distance using canonical_entities table
-    let hopJoins = '';
-    let hopWhere = '';
-    let hopParams: number[] = [];
-    if (maxHops !== null) {
-      hopJoins = `
-      LEFT JOIN canonical_entities ce_actor ON COALESCE(ea_actor.canonical_name, rt.actor) = ce_actor.canonical_name
-      LEFT JOIN canonical_entities ce_target ON COALESCE(ea_target.canonical_name, rt.target) = ce_target.canonical_name`;
-      hopWhere = `AND ce_actor.hop_distance_from_principal <= ?
-                  AND ce_target.hop_distance_from_principal <= ?`;
-      hopParams = [maxHops, maxHops];
-    }
-
-    const allRelationships = db.prepare(`
-      SELECT
-        rt.id,
-        rt.doc_id,
-        rt.timestamp,
-        COALESCE(ea_actor.canonical_name, rt.actor) as actor,
-        rt.action,
-        COALESCE(ea_target.canonical_name, rt.target) as target,
-        rt.location,
-        rt.triple_tags,
-        rt.top_cluster_ids
-      FROM rdf_triples rt
-      LEFT JOIN entity_aliases ea_actor ON rt.actor = ea_actor.original_name
-      LEFT JOIN entity_aliases ea_target ON rt.target = ea_target.original_name
-      ${hopJoins}
-      LEFT JOIN documents d ON rt.doc_id = d.doc_id
-      WHERE (rt.actor IN (${placeholders}) OR rt.target IN (${placeholders}))
-        AND (rt.timestamp IS NULL OR rt.timestamp >= '1970-01-01')
-        ${categoryWhere}
-        ${yearWhere}
-        ${hopWhere}
-      ORDER BY rt.timestamp
-    `).all(...allNames, ...allNames, ...categoryParams, ...yearParams, ...hopParams) as Array<{
-      id: number;
-      doc_id: string;
-      timestamp: string | null;
-      actor: string;
-      action: string;
-      target: string;
-      location: string | null;
-      triple_tags: string | null;
-      top_cluster_ids: string | null;
-    }>;
-
-    // Filter by tag clusters if specified
-    let filteredRelationships = allRelationships.filter(rel => {
-      if (selectedClusterIds.size === 0) return true; // No filter
-
-      try {
-        // Use the materialized top_cluster_ids column
-        const topClusters = rel.top_cluster_ids ? JSON.parse(rel.top_cluster_ids) : [];
-        // Include if any of the top 3 clusters are selected
-        return topClusters.some((clusterId: number) => selectedClusterIds.has(clusterId));
-      } catch {
-        return false;
-      }
-    });
-
-    // Filter by keywords using BM25 fuzzy matching if specified
-    if (keywords.length > 0) {
-      filteredRelationships = filteredRelationships.filter(rel => {
-        // Build searchable text from relationship fields
-        const searchText = `${rel.actor} ${rel.action} ${rel.target} ${rel.location || ''}`;
-        const score = calculateBM25Score(searchText, keywords);
-        // Include relationships with non-zero BM25 score (at least one keyword match)
-        return score > 0;
-      });
-    }
-
-    const relationships = filteredRelationships.map((rel) => ({
-      id: rel.id,
-      doc_id: rel.doc_id,
-      timestamp: rel.timestamp,
-      actor: rel.actor,
-      action: rel.action,
-      target: rel.target,
-      location: rel.location,
-      tags: rel.triple_tags ? JSON.parse(rel.triple_tags) : []
-    }));
-
-    res.json({
-      relationships,
-      totalBeforeFilter: totalRelationships.count
-    });
-  } catch (error) {
-    console.error('Error in /api/actor/:name/relationships:', error);
-    res.status(500).json({ error: 'An internal error occurred' });
-  }
-});
+app.get('/api/relationships',(req,res)=>relationships(req,res));
+app.get('/api/actor/:name/relationships',(req,res)=>relationships(req,res,req.params.name));
 
 // Get statistics with alias resolution
 app.get('/api/stats', (req, res) => {
@@ -618,46 +272,15 @@ app.get('/api/search', (req, res) => {
   }
 });
 
-// Get total relationship counts for top N actors (unfiltered totals)
-app.get('/api/actor-counts', (req, res) => {
+// Aggregate inside SQLite; return only the requested bounded actor window.
+app.get('/api/actor-counts',(req,res)=>{
   try {
-    const limit = parseInt(req.query.limit as string) || 300;
-
-    // Fetch all relationships WITHOUT filters to get true totals
-    const allRelationships = db.prepare(`
-      SELECT
-        COALESCE(ea_actor.canonical_name, rt.actor) as actor,
-        COALESCE(ea_target.canonical_name, rt.target) as target
-      FROM rdf_triples rt
-      LEFT JOIN entity_aliases ea_actor ON rt.actor = ea_actor.original_name
-      LEFT JOIN entity_aliases ea_target ON rt.target = ea_target.original_name
-      WHERE (rt.timestamp IS NULL OR rt.timestamp >= '1970-01-01')
-    `).all() as Array<{
-      actor: string;
-      target: string;
-    }>;
-
-    // Count relationships per actor
-    const actorCounts = new Map<string, number>();
-    allRelationships.forEach(rel => {
-      actorCounts.set(rel.actor, (actorCounts.get(rel.actor) || 0) + 1);
-      actorCounts.set(rel.target, (actorCounts.get(rel.target) || 0) + 1);
-    });
-
-    // Get top N actors
-    const topActors = Array.from(actorCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .reduce((acc, [name, count]) => {
-        acc[name] = count;
-        return acc;
-      }, {} as Record<string, number>);
-
-    res.json(topActors);
-  } catch (error) {
-    console.error('Error in /api/actor-counts:', error);
-    res.status(500).json({ error: 'An internal error occurred' });
-  }
+    const rows=db.prepare(`SELECT name,COUNT(*) AS n FROM (
+      SELECT COALESCE(ea.canonical_name,rt.actor) AS name FROM rdf_triples rt LEFT JOIN entity_aliases ea ON ea.original_name=rt.actor
+      UNION ALL SELECT COALESCE(ea.canonical_name,rt.target) FROM rdf_triples rt LEFT JOIN entity_aliases ea ON ea.original_name=rt.target
+    ) GROUP BY name ORDER BY n DESC,name LIMIT ?`).all(validateLimit(req.query.limit)) as {name:string,n:number}[];
+    res.json(Object.fromEntries(rows.map(r=>[r.name,r.n])));
+  } catch {res.status(500).json({error:'Actor counts unavailable'});}
 });
 
 // Get total relationship count for a specific actor (unfiltered total)
@@ -672,7 +295,7 @@ app.get('/api/actor/:name/count', (req, res) => {
       LEFT JOIN entity_aliases ea_actor ON rt.actor = ea_actor.original_name
       LEFT JOIN entity_aliases ea_target ON rt.target = ea_target.original_name
       WHERE (COALESCE(ea_actor.canonical_name, rt.actor) = ? OR COALESCE(ea_target.canonical_name, rt.target) = ?)
-      AND (rt.timestamp IS NULL OR rt.timestamp >= '1970-01-01')
+      
     `).get(name, name) as { count: number };
 
     res.json({ count: result.count });
@@ -720,7 +343,7 @@ app.get('/api/document/:docId/text', (req, res) => {
       return res.status(400).json({ error: 'Invalid document ID' });
     }
 
-    const doc = db.prepare('SELECT full_text FROM documents WHERE doc_id = ?').get(docId) as { full_text: string | null } | undefined;
+    const doc = db.prepare('SELECT substr(full_text,1,200000) AS full_text FROM documents WHERE doc_id = ?').get(docId) as { full_text: string | null } | undefined;
 
     if (!doc) {
       return res.status(404).json({ error: 'Document not found' });
@@ -730,11 +353,53 @@ app.get('/api/document/:docId/text', (req, res) => {
       return res.status(404).json({ error: 'Document text not available' });
     }
 
-    res.json({ text: doc.full_text });
+    res.json({ text: doc.full_text, preview: true, pagesUrl: `/api/document/${encodeURIComponent(docId)}/pages` });
   } catch (error) {
     console.error('Error in /api/document/:docId/text:', error);
     res.status(500).json({ error: 'An internal error occurred' });
   }
+});
+
+// Additive catalogue endpoints include documents with no graph relationships.
+const hasTable=(name:string)=>!!db.prepare("SELECT 1 FROM sqlite_master WHERE name=?").get(name);
+app.get('/api/documents',(req,res)=>{
+  try {
+    const q=String(req.query.q||'').trim().slice(0,200);
+    const after=String(req.query.after||'').slice(0,100);
+    const limit=Math.min(100,validateLimit(req.query.limit));
+    const fts=q && hasTable('documents_fts');
+    const where=fts ? "AND d.id IN (SELECT rowid FROM documents_fts WHERE documents_fts MATCH ?)" : q ? "AND instr(lower(COALESCE(d.full_text,'')),lower(?))>0" : '';
+    const query=fts ? '"'+q.replaceAll('"','""')+'"' : q;
+    const review=hasTable('ingestion_documents');
+    const rows=db.prepare(`SELECT d.doc_id,d.one_sentence_summary,d.category,
+      ${review ? "COALESCE(i.review_status,'upstream')" : "'upstream'"} AS review_status
+      FROM documents d ${review ? 'LEFT JOIN ingestion_documents i ON i.doc_id=d.doc_id' : ''}
+      WHERE d.doc_id>? ${where} ORDER BY d.doc_id LIMIT ?`).all(...(q?[after,query,limit+1]:[after,limit+1])) as any[];
+    const more=rows.length>limit;rows.splice(limit);
+    res.json({documents:rows,next:more?rows[rows.length-1].doc_id:null});
+  } catch {res.status(500).json({error:'Catalogue unavailable'});}
+});
+app.get('/api/document/:docId/pages',(req,res)=>{
+  try {
+    if (!hasTable('ingestion_pages')) return res.json({pages:[],next:null});
+    const after=Math.max(0,Number(req.query.after)||0);
+    const limit=Math.min(10,validateLimit(req.query.limit));
+    const rows=db.prepare('SELECT page,substr(text,1,200000) AS text,length(text) AS characters,quality,method,provenance FROM ingestion_pages WHERE doc_id=? AND page>? ORDER BY page LIMIT ?')
+      .all(req.params.docId,after,limit+1) as any[];
+    const more=rows.length>limit;rows.splice(limit);
+    res.json({pages:rows.map(r=>({...r,truncated:r.characters>200000,provenance:JSON.parse(r.provenance)})),next:more?rows[rows.length-1].page:null});
+  } catch {res.status(500).json({error:'Pages unavailable'});}
+});
+app.get('/api/document/:docId/evidence',(req,res)=>{
+  try {
+    if (!hasTable('ingestion_evidence')) return res.json({evidence:[],next:null});
+    const after=Math.max(0,Number(req.query.after)||0);
+    const rows=db.prepare(`SELECT e.*,rt.actor,rt.action,rt.target FROM ingestion_evidence e
+      JOIN rdf_triples rt ON rt.id=e.triple_id WHERE rt.doc_id=? AND e.triple_id>? ORDER BY e.triple_id LIMIT 101`)
+      .all(req.params.docId,after) as any[];
+    const more=rows.length>100;rows.splice(100);
+    res.json({evidence:rows,next:more?rows[rows.length-1].triple_id:null});
+  } catch {res.status(500).json({error:'Evidence unavailable'});}
 });
 
 // Get tag clusters
