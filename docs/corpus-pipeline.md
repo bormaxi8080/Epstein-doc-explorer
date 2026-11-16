@@ -32,7 +32,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 9 | OCR, quality checks and pilot | OCR implemented; live pilot recorded separately |
 | 10 | Canonical text and page maps | Implemented |
 | 11 | Chunk analysis and document assembly | Implemented |
-| 12 | Tags, entities and graph | Pending |
+| 12 | Tags, entities and graph | Implemented |
 | 13 | Compatible export, API and UI | Pending |
 | 14 | Other formats and scale validation | Pending |
 | 15 | Bounded full-corpus operation | Pending |
@@ -137,3 +137,12 @@ Bounded rolling document synthesis consumes every fragment summary and caches
 each merge; it cannot introduce relationships. The original chunk evidence stays
 in a streaming hashed map. This is hierarchical compression, not a guarantee of
 lossless semantic recall. Public approval binds the current text/analysis version.
+
+## Graph and tags
+
+Cluster IDs stay stable. Unknown tags enter Unclassified; optional FCC proposals
+are cached and require explicit review before changing assignments. Aliases need
+reviewed reasons, reject cycles, and cannot merge unknown/redacted identities.
+Adjacency and BFS frontiers use SQLite temporary tables with disk-backed temp
+storage under the corpus root. No full graph is loaded into Python memory.
+Disconnected entities retain the legacy hop-distance sentinel 1000.

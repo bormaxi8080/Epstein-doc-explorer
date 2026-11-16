@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 12: disk-backed graph distances, stable cluster assignments, cached
+  semantic tag proposals and reviewed aliases with document-scoped unknowns.
+
 - Corpus stage 11: bounded resumable evidence fragments, adaptive splits, cached
   document synthesis and explicit version-bound approval.
 
