@@ -30,7 +30,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 7 | Native extraction and isolated rendering | Implemented |
 | 8 | Multimodal FCC transport | Implemented; live route requires explicit pilot |
 | 9 | OCR, quality checks and pilot | OCR implemented; live pilot recorded separately |
-| 10 | Canonical text and page maps | Pending |
+| 10 | Canonical text and page maps | Implemented |
 | 11 | Chunk analysis and document assembly | Pending |
 | 12 | Tags, entities and graph | Pending |
 | 13 | Compatible export, API and UI | Pending |
@@ -117,3 +117,13 @@ Accepted pages carry full source/render/model/prompt provenance. Page edits or
 review decisions invalidate document text/analysis/approval. Rendering is bounded
 just-in-time scratch, not a persistent cache of every page. Network calls only
 run in explicitly invoked OCR jobs after budget admission.
+
+## Canonical text v2
+
+TXT uses exactly `[Page N]\n` markers and two newlines between pages. A streaming
+JSONL page map records Unicode code-point offsets and the immutable page
+artifact reference. V2 uses a hashed external map to avoid loading a large
+document's complete page map into RAM. Both files publish before the text
+manifest/DB pointer; incomplete or unreviewed pages cannot silently disappear.
+Private draft assembly can explicitly retain review-required pages. Reassembly
+is idempotent; changed page provenance invalidates analysis and approval.

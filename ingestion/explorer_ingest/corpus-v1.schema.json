@@ -233,6 +233,68 @@
           }
         }
       }
+    },
+    "text_v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format_version",
+        "doc_id",
+        "source_sha256",
+        "text_sha256",
+        "pages_count",
+        "relative_path",
+        "page_map_ref",
+        "offset_unit",
+        "review_required"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 2
+        },
+        "doc_id": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "text_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "pages_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "page_map_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        "offset_unit": {
+          "const": "unicode_codepoint"
+        },
+        "review_required": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     }
   }
 }

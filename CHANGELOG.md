@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 10: streaming canonical UTF-8 TXT, hashed Unicode page maps,
+  immutable text versions, exact coverage and downstream invalidation checks.
+
 - Corpus stage 9: page OCR, provenance, native/OCR routing and explicit quality
   review, including empty/photo pages, layout bounds and disagreement checks.
 

@@ -59,6 +59,11 @@ def select_page(corpus, doc_id, page, text, method, provenance, issues=None):
     }
     validate("page", value)
     reference = corpus.storage.put("page", value)
+    previous = corpus.db.execute(
+        "SELECT selected_ref FROM corpus_pages WHERE doc_id=? AND page=?", (doc_id, page)
+    ).fetchone()
+    if previous and previous[0] and json.loads(previous[0]) == reference:
+        return reference
     changed = corpus.db.execute(
         """UPDATE corpus_pages SET selected_ref=?,status=?
         WHERE doc_id=? AND page=?""",
