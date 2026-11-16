@@ -71,9 +71,10 @@ def work(corpus, config, limit, stage, allow_fcc=False, job_id=None, allow_revie
 
     old = {s: signal.signal(s, pause) for s in (signal.SIGINT, signal.SIGTERM)}
     completed = 0
+    attempted = 0
     paused = None
     try:
-        while completed < limit and not stop:
+        while attempted < limit and not stop:
             # Offline work never claims OCR/analysis jobs.
             selected = stage
             if not allow_fcc and selected in ("ocr", "analyze", "assemble"):
@@ -94,6 +95,7 @@ def work(corpus, config, limit, stage, allow_fcc=False, job_id=None, allow_revie
                     break
             if not job:
                 break
+            attempted += 1
             payload = json.loads(job["payload"])
             doc_id = payload["doc_id"]
             try:
@@ -194,6 +196,7 @@ def work(corpus, config, limit, stage, allow_fcc=False, job_id=None, allow_revie
                 )
         return dict(
             completed_jobs=completed,
+            attempted_jobs=attempted,
             paused=paused or ("signal" if stop else None),
             status=read_status(config.root),
         )

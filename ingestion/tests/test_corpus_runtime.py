@@ -208,3 +208,26 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(result["completed_jobs"], 0)
             self.assertIsNone(c.document(doc)["text_ref"])
             self.assertEqual(result["status"]["failed_jobs"], 1)
+
+    def test_work_limit_counts_failed_jobs_as_attempted(self):
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            config = RunConfig(d, MODEL, "test", limits={"reserve_bytes": 0})
+            doc = document_id("5" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes) VALUES (?,?,1)", (doc, "5" * 64)
+            )
+            c.queue.enqueue("one", "analyze", {"doc_id": doc})
+            c.queue.enqueue("two", "analyze", {"doc_id": doc})
+            with (
+                patch("explorer_ingest.corpus_cli.free_route", return_value={}),
+                patch(
+                    "explorer_ingest.corpus_cli.analyze_fragment",
+                    side_effect=ValueError("synthetic"),
+                ),
+            ):
+                result = work(c, config, 1, "analyze", allow_fcc=True)
+            self.assertEqual(result["attempted_jobs"], 1)
+            self.assertEqual(result["completed_jobs"], 0)
+            self.assertEqual(c.queue.status()["states"], {"failed": 1, "pending": 1})

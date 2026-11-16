@@ -315,3 +315,9 @@ member provenance and bounds.
 
 See [the real pilot record](corpus-pilot-2026-11-16.md) for observed coverage,
 provider/quality limits, baseline issue preservation and exact artifact paths.
+
+Real v2 responses sometimes echoed schema declarations or added $schema/$id.
+Prompt v3 uses a data-instance template and concise field constraints; the strict
+validator is unchanged. Obsolete pending/retry/failed prompt jobs and synthesis
+plans retire with history. --limit bounds all claimed jobs, including failures;
+attempted_jobs and completed_jobs are reported separately.

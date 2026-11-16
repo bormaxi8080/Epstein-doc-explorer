@@ -210,3 +210,26 @@ class AnalysisTests(unittest.TestCase):
                 analyze_fragment(c, payload, client)
             self.assertEqual(client.calls, 2)
             self.assertFalse(list(c.storage.root.glob("artifacts/analysis-chunk/*/*.json")))
+
+    def test_prompt_upgrade_retires_old_pending_jobs_with_history(self):
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            doc = document_id("6" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes) VALUES (?,?,1)", (doc, "6" * 64)
+            )
+            c.inspected(doc, dict(format="pdf", status="inspected", pages=1))
+            select_page(c, doc, 1, "Synthetic source", "native", {})
+            assemble_text(c, doc)
+            with patch("explorer_ingest.corpus_analysis.ANALYSIS_PROMPT_VERSION", "old-test"):
+                plan_analysis(c, doc, Client().identity())
+            old = c.db.execute("SELECT id FROM jobs WHERE stage='analyze'").fetchone()[0]
+            plan_analysis(c, doc, Client().identity())
+            self.assertEqual(
+                c.db.execute("SELECT status FROM jobs WHERE id=?", (old,)).fetchone()[0],
+                "superseded",
+            )
+            self.assertEqual(c.queue.status()["states"], {"pending": 1, "superseded": 1})

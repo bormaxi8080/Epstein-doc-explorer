@@ -6,6 +6,10 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Evidence prompt v3 requests data instances rather than schema declarations;
+  retire obsolete prompt jobs with history. Work limits now count every claimed
+  job, including failed jobs, instead of counting successful results only.
+
 - Record the authorized real pilot: 215/250 OCR pages before HTTP 429, verified
   original hashes, 215 matching TXT/SQLite drafts and an explicitly partial
   private bundle. Preserve upstream data issues and document acceptance gates.
