@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 9: page OCR, provenance, native/OCR routing and explicit quality
+  review, including empty/photo pages, layout bounds and disagreement checks.
+
 - Corpus stage 8: explicit multimodal FCC Messages transport, bounded payloads,
   safe errors/Retry-After and real loopback image-contract regression coverage.
 

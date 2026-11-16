@@ -29,7 +29,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 6 | File/document/page registry | Implemented |
 | 7 | Native extraction and isolated rendering | Implemented |
 | 8 | Multimodal FCC transport | Implemented; live route requires explicit pilot |
-| 9 | OCR, quality checks and pilot | Pending |
+| 9 | OCR, quality checks and pilot | OCR implemented; live pilot recorded separately |
 | 10 | Canonical text and page maps | Pending |
 | 11 | Chunk analysis and document assembly | Pending |
 | 12 | Tags, entities and graph | Pending |
@@ -107,3 +107,13 @@ and call admission; the transport performs one attempt. Image/response bytes are
 limited, truncation and invalid JSON fail closed, and HTTP Retry-After is bounded.
 API keys stay in process environment, outside config/artifacts. Requested and
 reported models, response IDs, usage and response digests are retained.
+
+## OCR and review
+
+OCR preserves raw native and model results separately. Schema, layout bounds,
+body coverage and native/OCR disagreement determine review flags. Photo/blank
+classifications require explicit review; HTTP success never auto-approves a page.
+Accepted pages carry full source/render/model/prompt provenance. Page edits or
+review decisions invalidate document text/analysis/approval. Rendering is bounded
+just-in-time scratch, not a persistent cache of every page. Network calls only
+run in explicitly invoked OCR jobs after budget admission.
