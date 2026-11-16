@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 6: resumable source registry, content-based document deduplication,
+  page identities and checked original access without long downloader locks.
+
 - Corpus stage 5: identity-checked external roots, immutable hashed artifacts,
   safe scratch/environment scoping and explicit disk/memory/input budgets.
 

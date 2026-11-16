@@ -26,7 +26,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 3 | Verified pilot/full source selection | Implemented |
 | 4 | Durable leased job queue | Implemented |
 | 5 | External storage and resource limits | Implemented |
-| 6 | File/document/page registry | Pending |
+| 6 | File/document/page registry | Implemented |
 | 7 | Native extraction and isolated rendering | Pending |
 | 8 | Multimodal FCC transport | Pending |
 | 9 | OCR, quality checks and pilot | Pending |
@@ -79,3 +79,13 @@ scoped to the selected root. Defaults reserve 5 GiB, bound artifacts to 16 MiB,
 scratch to 512 MiB, source documents to 512 MiB and rendered pages to 20 million
 pixels. Parser workers additionally enforce time/RSS limits. These are admission
 guards, not filesystem quotas. Credentials and rendered images are not logged.
+
+## Registry
+
+Frozen selections import in 5,000-source transactions; only a completely
+validated selection can schedule inspection jobs. Exact content hashes share
+physical document processing while every asset/occurrence remains in source
+metadata. Page rows use `(doc_id,page)` identities. Source reads use short
+read-only ledger access and verify the original hash on first use or stat change;
+an eight-entry worker cache avoids rehashing an unchanged PDF for every page.
+Root identity and file stamps are checked again after each operation.
