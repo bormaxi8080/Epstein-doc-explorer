@@ -50,6 +50,7 @@ def export_corpus(corpus, output, clusters_path, base_db=None, include_unreviewe
             if base_db:
                 with closing(readonly_db(base_db)) as source:
                     source.backup(db)
+            db.execute("PRAGMA journal_mode=DELETE")
             db.execute("PRAGMA temp_store=FILE")
             db.execute("PRAGMA cache_size=-8192")
             db.executescript(SCHEMA)

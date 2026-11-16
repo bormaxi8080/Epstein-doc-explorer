@@ -321,3 +321,19 @@ Prompt v3 uses a data-instance template and concise field constraints; the stric
 validator is unchanged. Obsolete pending/retry/failed prompt jobs and synthesis
 plans retire with history. --limit bounds all claimed jobs, including failures;
 attempted_jobs and completed_jobs are reported separately.
+
+Long queued operations renew their fenced lease at bounded progress intervals,
+including model callbacks and cached synthesis/page loops. Completed jobs clear
+the progress callback before downstream planning. Renewal does not consume model
+call budget or permit an already expired worker to publish accepted results.
+
+Published bundle SQLite uses DELETE journal mode even when the source baseline
+uses WAL. Consumers can read the immutable database without writable WAL/SHM
+coordination sidecars. The live corpus ledger retains WAL for durable jobs.
+
+API SQLite scratch defaults to memory with a 512 MiB SQLite heap cap (this does
+not cap V8 itself). Large deployments should set SQLITE_TMPDIR to an existing
+writable external directory outside immutable releases. The server validates the
+path and pins its device/inode, uses file scratch there, and returns 503 if it
+becomes unavailable. SQLITE_MEMORY_MB permits 64–2048 MiB. An invalid explicit
+path fails startup; it never silently selects the system temporary directory.

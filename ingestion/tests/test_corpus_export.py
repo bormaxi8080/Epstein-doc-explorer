@@ -44,6 +44,7 @@ class ExportTests(unittest.TestCase):
             )
             baseline = root / "base.db"
             db = sqlite3.connect(baseline)
+            db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
             db.execute(
                 "INSERT INTO documents(doc_id,file_path,one_sentence_summary,paragraph_summary,category,content_tags,analysis_timestamp) VALUES ('base','base.txt','base','base','other','[]','now')"
@@ -66,6 +67,7 @@ class ExportTests(unittest.TestCase):
             self.assertIn("reviewed-new-tag", exported_clusters[0]["tags"])
             self.assertEqual(digest_file(baseline), sha)
             db = sqlite3.connect(root / "private/document_analysis.db")
+            self.assertEqual(db.execute("PRAGMA journal_mode").fetchone()[0], "delete")
             full, path = db.execute(
                 "SELECT full_text,file_path FROM documents WHERE doc_id=?", (doc,)
             ).fetchone()

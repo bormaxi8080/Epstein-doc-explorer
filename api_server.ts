@@ -73,6 +73,29 @@ let db: Database.Database;
 try {
   db = new Database(DB_PATH, { readonly: DB_READONLY, fileMustExist: true });
   if (!DB_READONLY) db.pragma('journal_mode = WAL');
+  db.pragma('cache_size = -8192');
+  const memoryMb=Number(process.env.SQLITE_MEMORY_MB || 512);
+  if (!Number.isInteger(memoryMb) || memoryMb<64 || memoryMb>2048) throw new Error('Invalid SQLITE_MEMORY_MB');
+  db.pragma(`hard_heap_limit = ${memoryMb*1024*1024}`);
+  const requestedTemp=process.env.SQLITE_TMPDIR?.trim();
+  if (requestedTemp) {
+    if (!path.isAbsolute(requestedTemp)) throw new Error('SQLITE_TMPDIR must be absolute');
+    const temporary=fs.realpathSync(requestedTemp);
+    const identity=fs.statSync(temporary);
+    if (!identity.isDirectory()) throw new Error('SQLITE_TMPDIR must exist');
+    fs.accessSync(temporary,fs.constants.W_OK);
+    db.pragma(`temp_store_directory = '${temporary.replaceAll("'","''")}'`);
+    if (db.pragma('temp_store_directory',{simple:true})!==temporary) throw new Error('SQLite temporary path was not applied');
+    db.pragma('temp_store = FILE');
+    app.use((_req,res,next)=>{
+      try {const current=fs.statSync(temporary);if(current.dev!==identity.dev || current.ino!==identity.ino) throw new Error('Temporary volume changed');next();}
+      catch {res.status(503).json({error:'Configured SQLite temporary storage unavailable'});}
+    });
+    console.log(`SQLite scratch: explicit directory; heap cap ${memoryMb} MiB`);
+  } else {
+    db.pragma('temp_store = MEMORY');
+    console.log(`SQLite scratch: bounded memory; heap cap ${memoryMb} MiB`);
+  }
   console.log(`✓ Database initialized: ${DB_PATH}`);
 } catch (error) {
   console.error('Failed to initialize database:', error);

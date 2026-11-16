@@ -81,7 +81,11 @@ def free_route(config, require_image=True):
     if not entry:
         raise ValueError("Free model unavailable")
     pricing = entry["pricing"]
-    if any(float(pricing.get(k, "1")) != 0 for k in ("prompt", "completion")):
+    required = ("prompt", "completion")
+    optional = ("request", "image", "internal_reasoning", "input_cache_read", "input_cache_write")
+    if any(float(pricing.get(k, "1")) != 0 for k in required) or any(
+        float(pricing.get(k, "0")) != 0 for k in optional
+    ):
         raise ValueError("Route is not free")
     if require_image and "image" not in entry["architecture"]["input_modalities"]:
         raise ValueError("Route does not advertise image input")
@@ -99,6 +103,8 @@ class CallBudget:
           id INTEGER PRIMARY KEY,at REAL,model TEXT,state TEXT,usage TEXT,raw_ref TEXT);""")
 
     def before(self, identity):
+        if getattr(self.corpus, "progress", None):
+            self.corpus.progress()
         c = self.config
         db = self.corpus.db
         previous = db.execute(
@@ -123,6 +129,8 @@ class CallBudget:
         self.calls += 1
 
     def record(self, raw):
+        if getattr(self.corpus, "progress", None):
+            self.corpus.progress()
         ref = self.corpus.storage.put(
             "fcc-envelope",
             {
@@ -138,6 +146,8 @@ class CallBudget:
             )
 
     def after(self, result):
+        if getattr(self.corpus, "progress", None):
+            self.corpus.progress()
         self.corpus.db.execute(
             "UPDATE corpus_model_calls SET state='completed',usage=? WHERE id=?",
             (json.dumps(result["usage"]), self.current),

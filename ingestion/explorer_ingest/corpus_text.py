@@ -18,6 +18,8 @@ def pages(corpus, doc_id, allow_review=False):
     for row in corpus.db.execute(
         "SELECT * FROM corpus_pages WHERE doc_id=? ORDER BY page", (doc_id,)
     ):
+        if getattr(corpus, "progress", None):
+            corpus.progress()
         count += 1
         if row["page"] != count or not row["selected_ref"]:
             raise ValueError("Document pages are incomplete")

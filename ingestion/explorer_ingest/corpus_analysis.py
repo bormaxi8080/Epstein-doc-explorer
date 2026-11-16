@@ -334,6 +334,8 @@ def assemble_analysis(
         with temporary.open("w", encoding="utf-8") as output:
             for row in rows:
                 for reference, value in leaf_results(corpus, row[0]):
+                    if getattr(corpus, "progress", None):
+                        corpus.progress()
                     count += 1
                     output.write(json.dumps(reference) + "\n")
                     current = summary(value["output"])

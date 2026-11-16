@@ -231,3 +231,50 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(result["attempted_jobs"], 1)
             self.assertEqual(result["completed_jobs"], 0)
             self.assertEqual(c.queue.status()["states"], {"failed": 1, "pending": 1})
+
+    def test_long_assembly_renews_lease_without_more_model_calls(self):
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            config = RunConfig(d, MODEL, "test", limits={"reserve_bytes": 0})
+            doc = document_id("7" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes) VALUES (?,?,1)", (doc, "7" * 64)
+            )
+            c.db.execute("INSERT INTO corpus_meta VALUES (?,?)", ("analysis_plan:" + doc, "plan"))
+            c.queue.enqueue("long", "assemble", dict(doc_id=doc, plan_id="plan", allow_review=True))
+            now = [1000.0]
+
+            def slow(*args):
+                for _ in range(10):
+                    now[0] += 100
+                    args[0].progress()
+                return {"synthetic": True}
+
+            with (
+                patch("explorer_ingest.corpus_cli.free_route", return_value={}),
+                patch("explorer_ingest.corpus_cli.assemble_analysis", side_effect=slow),
+                patch("explorer_ingest.corpus_queue.time.time", side_effect=lambda: now[0]),
+                patch("explorer_ingest.corpus_cli.time.monotonic", side_effect=lambda: now[0]),
+            ):
+                result = work(c, config, 1, "assemble", allow_fcc=True)
+            self.assertEqual(result["completed_jobs"], 1)
+            self.assertEqual(c.queue.status()["states"], {"done": 1})
+
+    def test_free_route_rejects_separate_image_or_request_charges(self):
+        config = RunConfig("/external", MODEL, "test")
+        for field in ("image", "request", "internal_reasoning"):
+            with patch("explorer_ingest.corpus_runtime.urllib.request.urlopen") as fetch:
+                fetch.return_value.__enter__.return_value.read.return_value = json.dumps(
+                    {
+                        "data": [
+                            {
+                                "id": "inclusionai/ling-3.2-flash:free",
+                                "pricing": {"prompt": "0", "completion": "0", field: "0.01"},
+                                "architecture": {"input_modalities": ["text", "image"]},
+                            }
+                        ]
+                    }
+                ).encode()
+                with self.assertRaisesRegex(ValueError, "not free"):
+                    free_route(config)

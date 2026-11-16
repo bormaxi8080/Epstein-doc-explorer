@@ -6,13 +6,25 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Verify zero request/image/reasoning/cache prices as well as prompt/completion
+  prices before admitting the explicit free FCC route.
+
+- Bound API SQLite scratch in memory by default; validate an explicit external
+  SQLITE_TMPDIR for larger queries and pin its directory identity.
+
+- Publish bundle databases in DELETE journal mode so read-only consumers do not
+  need WAL/SHM sidecars inherited from the source baseline.
+
+- Renew active leases during long page/synthesis work and model callbacks;
+  verify a simulated 1,000-second assembly without an expired completion lease.
+
 - Evidence prompt v3 requests data instances rather than schema declarations;
   retire obsolete prompt jobs with history. Work limits now count every claimed
   job, including failed jobs, instead of counting successful results only.
 
-- Record the authorized real pilot: 215/250 OCR pages before HTTP 429, verified
-  original hashes, 215 matching TXT/SQLite drafts and an explicitly partial
-  private bundle. Preserve upstream data issues and document acceptance gates.
+- Record the authorized real pilot: 250/250 OCR pages after bounded recovery from
+  HTTP 429, 250 matching TXT/SQLite drafts, and five validated v3 draft analyses.
+  Preserve upstream data issues and document remaining analysis/review gates.
 
 - Keep Office ZIP containers explicitly unsupported instead of treating internal
   XML as completed page OCR; include GIF raster input.

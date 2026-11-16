@@ -6,6 +6,7 @@ import json
 import logging
 import signal
 import sys
+import time
 from logging.handlers import RotatingFileHandler
 
 from .corpus_analysis import analyze_fragment, approve, assemble_analysis, plan_analysis
@@ -46,6 +47,8 @@ def plan_pages(corpus, config, doc_id=None):
                 count += 1
                 if count % 5000 == 0:
                     corpus.storage.check()
+                    if getattr(corpus, "progress", None):
+                        corpus.progress()
                     corpus.db.commit()
                     corpus.db.execute("BEGIN IMMEDIATE")
         corpus.db.commit()
@@ -98,6 +101,15 @@ def work(corpus, config, limit, stage, allow_fcc=False, job_id=None, allow_revie
             attempted += 1
             payload = json.loads(job["payload"])
             doc_id = payload["doc_id"]
+            last_pulse = [time.monotonic()]
+
+            def pulse(force=False, lease_job=job, pulse_state=last_pulse):
+                if force or time.monotonic() - pulse_state[0] >= 30:
+                    corpus.storage.check()
+                    corpus.queue.heartbeat(lease_job["id"], lease_job["token"])
+                    pulse_state[0] = time.monotonic()
+
+            corpus.progress = pulse
             try:
                 corpus.storage.check()
                 if job["stage"] == "inspect":
@@ -171,6 +183,8 @@ def work(corpus, config, limit, stage, allow_fcc=False, job_id=None, allow_revie
                     ref = analyze_fragment(corpus, payload, client, budget.before, budget.after)
                 else:
                     raise ValueError("Unsupported worker stage")
+                pulse(True)
+                corpus.progress = None
                 corpus.queue.finish(job["id"], job["token"], ref)
                 logging.info("job_done stage=%s id=%s", job["stage"], job["id"])
                 completed += 1
@@ -194,6 +208,8 @@ def work(corpus, config, limit, stage, allow_fcc=False, job_id=None, allow_revie
                     job["id"],
                     type(exc).__name__,
                 )
+            finally:
+                corpus.progress = None
         return dict(
             completed_jobs=completed,
             attempted_jobs=attempted,
