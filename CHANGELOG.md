@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 8: explicit multimodal FCC Messages transport, bounded payloads,
+  safe errors/Retry-After and real loopback image-contract regression coverage.
+
 - Corpus stage 7: pinned isolated PDFium/Pillow page extraction and rendering,
   native-layer quality routing, geometry and explicit pixel/output budgets.
 

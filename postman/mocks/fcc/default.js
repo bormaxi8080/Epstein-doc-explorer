@@ -1,10 +1,11 @@
 const http = require('http');
 let requests = 0;
+let imageRequests = 0;
 const modelRequests = {};
 http.createServer(async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   if (req.method === 'GET' && req.url === '/calls') {
-    res.end(JSON.stringify({ requests, modelRequests }));
+    res.end(JSON.stringify({ requests, modelRequests, imageRequests }));
     return;
   }
   if (req.method !== 'POST' || req.url !== '/v1/messages') {
@@ -43,6 +44,24 @@ http.createServer(async (req, res) => {
   }
   if (body.model === 'failure-timeout') {
     await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  if (Array.isArray(body.messages[0].content)) {
+    const blocks = body.messages[0].content;
+    const image = blocks.find(b => b.type === 'image');
+    if (!image || image.source?.type !== 'base64' || !image.source?.data ||
+        !['image/jpeg', 'image/png'].includes(image.source.media_type)) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'Missing image contract' }));
+      return;
+    }
+    imageRequests += 1;
+    const ocr = { text: 'VISIBLE SYNTHETIC TEXT', page_kind: 'document', needs_review: false,
+      blocks: [{ text: 'VISIBLE SYNTHETIC TEXT', kind: 'paragraph', bbox: null }] };
+    res.end(JSON.stringify({ id: 'msg_synthetic_ocr', model: body.model,
+      stop_reason: body.model === 'ocr-truncated' ? 'max_tokens' : 'end_turn',
+      content: [{type: 'text', text: body.model === 'ocr-invalid-json' ? '{' : JSON.stringify(ocr)}],
+      usage: {input_tokens: 100, output_tokens: 25} }));
+    return;
   }
   let fragment;
   try {

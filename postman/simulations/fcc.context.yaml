@@ -23,6 +23,13 @@ assumptions:
     verification: Public FCC README inspected on 2026-11-02; installed FCC has not been called.
     source: ingestion/explorer_ingest/provider.py; https://github.com/Alishahryar1/free-claude-code
     updated_at: '2026-11-02'
+  - id: corpus-multimodal-caller
+    status: supported
+    claim: The corpus caller sends base64 image blocks, retains usage and rejects truncated, malformed and failed responses against the local stand-in.
+    reason: Real urllib requests and the stand-in image-request counter are checked by offline tests.
+    verification: On 2026-11-16, stage 8 tests exercise images, byte limits, invalid JSON and HTTP failures. This verifies caller behavior; real FCC/model image inference is a separate explicit pilot.
+    source: ingestion/tests/test_corpus_fcc.py; postman/mocks/fcc/default.js
+    updated_at: '2026-11-16'
 fingerprints:
   - id: initial-fork
     date: '2026-11-02'
