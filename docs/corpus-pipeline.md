@@ -283,3 +283,35 @@ excludes relationships inferred from stamps/filenames/photo labels and permits
 one budgeted corrective call for schema/evidence failure. Both answers are kept;
 the correction must pass the same strict validator. A second failure remains
 failed. Network timeouts still pause instead of triggering a corrective call.
+
++HTTP error diagnostics (bounded body, status, Retry-After) are retained externally
++when a call recorder is configured. HTTP 429 does not establish a reset time or
++whether the limit is daily versus transient. The worker pauses; it never rotates
++providers/accounts to evade it. Export manifests include selected-corpus coverage
++so a partial private bundle cannot be mistaken for a completed archive.
++
++The real baseline contains invalid alias cycles. New corpus exports quarantine
++each cycle and every chain entering it in ingestion_alias_issues, retaining the
++complete original row. Such names remain distinct; no canonical identity is
++chosen automatically. Reviewed new aliases still reject cycles. The source
++baseline is unchanged, and the manifest reports the quarantined row count.
++
++The pinned baseline also has nine RDF rows whose document is absent. Derived
++bundles retain their full rows in ingestion_baseline_triple_issues and exclude
++them from the active graph, preserving foreign-key integrity without fabricating
++document metadata/text. All baseline rows remain either active or in the explicit
++issue tables; the source file's checksum remains unchanged. Manifests count both
++forms of baseline quarantine.
++
++Corpus setup and all CLI mutation commands scope SQLite temporary work to the
++external root. Inspection scheduling uses indexed EXISTS rather than a DISTINCT
++sort. Read-only status streams document/page state counters instead of building
++large temporary GROUP BY sorts. No inference, initialization or index creation
++runs in status. Storage guards are admission checks, not OS filesystem quotas.
++
+Known ZIP-based Office extensions remain unsupported documents; their internal
+XML is not misrepresented as page OCR. Generic ZIP archives still expand with
+member provenance and bounds.
+
+See [the real pilot record](corpus-pilot-2026-11-16.md) for observed coverage,
+provider/quality limits, baseline issue preservation and exact artifact paths.

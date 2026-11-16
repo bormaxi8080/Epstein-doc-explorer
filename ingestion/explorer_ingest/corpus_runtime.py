@@ -6,6 +6,7 @@ import json
 import os
 import time
 import urllib.request
+from collections import Counter
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -170,8 +171,8 @@ def read_status(root):
     guard = guard_directory(root)
     marker = json.loads((root / "identity.json").read_text())
     with closing(readonly_db(root / "corpus.sqlite3")) as db:
-        docs = dict(db.execute("SELECT status,COUNT(*) FROM corpus_documents GROUP BY status"))
-        pages = dict(db.execute("SELECT status,COUNT(*) FROM corpus_pages GROUP BY status"))
+        docs = dict(Counter(row[0] for row in db.execute("SELECT status FROM corpus_documents")))
+        pages = dict(Counter(row[0] for row in db.execute("SELECT status FROM corpus_pages")))
         jobs = dict(db.execute("SELECT status,COUNT(*) FROM jobs GROUP BY status"))
         counts = db.execute("""SELECT COUNT(*),COUNT(text_ref),COUNT(analysis_ref),COUNT(approved_key),
            SUM(CASE WHEN page_count IS NULL THEN 1 ELSE 0 END) FROM corpus_documents""").fetchone()
@@ -180,7 +181,7 @@ def read_status(root):
             "SELECT COUNT(*) FROM corpus_pages WHERE selected_ref IS NULL"
         ).fetchone()[0]
         review = db.execute(
-            "SELECT COUNT(*) FROM corpus_pages WHERE status!='accepted'"
+            "SELECT COUNT(*) FROM corpus_pages WHERE selected_ref IS NOT NULL AND status!='accepted'"
         ).fetchone()[0]
         failures = jobs.get("failed", 0)
         unfinished = sum(v for k, v in jobs.items() if k not in ("done", "superseded"))

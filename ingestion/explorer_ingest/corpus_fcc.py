@@ -109,6 +109,23 @@ class FCCMessages:
                 )
             except (ValueError, TypeError, OverflowError):
                 pass
+            if self.recorder:
+                try:
+                    body = exc.read(c.max_response_bytes + 1)
+                    self.recorder(
+                        json.dumps(
+                            {
+                                "http_error": status,
+                                "body_base64": base64.b64encode(
+                                    body[: c.max_response_bytes]
+                                ).decode("ascii"),
+                                "truncated": len(body) > c.max_response_bytes,
+                                "retry_after_seconds": max(0, min(retry_after, 300)),
+                            }
+                        ).encode()
+                    )
+                except (OSError, TimeoutError):
+                    pass
             exc.close()
             raise FCCFailure(
                 "FCC HTTP " + str(status),

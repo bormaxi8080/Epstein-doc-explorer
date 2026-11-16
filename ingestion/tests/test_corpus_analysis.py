@@ -129,6 +129,8 @@ class AnalysisTests(unittest.TestCase):
             self.assertEqual(c.storage.get(ref)["review_required"], 1)
             with self.assertRaisesRegex(ValueError, "reviewed"):
                 approve(c, doc)
+            plan_analysis(c, doc, {"model": "changed"}, allow_review=True)
+            self.assertEqual(c.document(doc)["status"], "text_review")
 
     def test_schema_repair_is_bounded_and_retains_rejected_output(self):
         class RepairClient(Client):
@@ -165,3 +167,46 @@ class AnalysisTests(unittest.TestCase):
             self.assertEqual(
                 c.storage.get(result["rejected_ref"])["reason"], "schema.additionalProperties"
             )
+
+    def test_two_bad_evidence_answers_never_publish_an_accepted_chunk(self):
+        class Invalid(Client):
+            calls = 0
+
+            def generate(self, prompt):
+                value = Client.generate(self, prompt)
+                value["output"]["rdf_triples"] = [
+                    dict(
+                        actor="Synthetic A",
+                        action="stated",
+                        target="Synthetic B",
+                        timestamp=None,
+                        location=None,
+                        tags=[],
+                        explicit_topic="",
+                        assertion_type="document_statement",
+                        evidence={"page": 1, "quote": "Invented words"},
+                    )
+                ]
+                return value
+
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            doc = document_id("4" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes,text_ref) VALUES (?,?,1,?)",
+                (doc, "4" * 64, json.dumps({"sha256": "text"})),
+            )
+            client = Invalid()
+            payload = dict(
+                doc_id=doc,
+                text_key="text",
+                page=1,
+                start=0,
+                text="Synthetic source",
+                provider=client.identity(),
+            )
+            with self.assertRaisesRegex(ValueError, "evidence"):
+                analyze_fragment(c, payload, client)
+            self.assertEqual(client.calls, 2)
+            self.assertFalse(list(c.storage.root.glob("artifacts/analysis-chunk/*/*.json")))

@@ -257,3 +257,64 @@ def propose_alias(corpus, original, candidates, client, before_call=None, after_
     )
     corpus.db.execute("INSERT INTO corpus_tag_calls VALUES (?,?)", (key, json.dumps(ref)))
     return ref
+
+
+def quarantine_baseline_alias_cycles(db):
+    """Retain invalid upstream mappings without inventing a canonical identity."""
+    db.executescript("""
+      CREATE TABLE IF NOT EXISTS ingestion_alias_issues(
+        original_name TEXT PRIMARY KEY,raw_row TEXT,reason TEXT,source TEXT);
+      DROP TABLE IF EXISTS temp.bad_aliases;
+      CREATE TEMP TABLE bad_aliases(name TEXT PRIMARY KEY);
+    """)
+    columns = [r[1] for r in db.execute("PRAGMA table_info(entity_aliases)")]
+    count = 0
+    for row in db.execute("SELECT * FROM entity_aliases"):
+        data = dict(zip(columns, row, strict=True))
+        original = data["original_name"]
+        name = original
+        visited = set()
+        bad = False
+        while True:
+            if name in visited:
+                bad = True
+                break
+            visited.add(name)
+            target = db.execute(
+                "SELECT canonical_name FROM entity_aliases WHERE original_name=?", (name,)
+            ).fetchone()
+            if not target or target[0] == name:
+                break
+            name = target[0]
+        if bad:
+            db.execute("INSERT INTO bad_aliases VALUES (?)", (original,))
+            db.execute(
+                "INSERT OR IGNORE INTO ingestion_alias_issues VALUES (?,?,'cycle_in_baseline_alias_chain','baseline')",
+                (original, json.dumps(data)),
+            )
+            count += 1
+    db.execute("DELETE FROM entity_aliases WHERE original_name IN (SELECT name FROM bad_aliases)")
+    db.execute("DROP TABLE bad_aliases")
+    return count
+
+
+def quarantine_baseline_orphans(db):
+    """Preserve unverifiable upstream edges without fabricating source documents."""
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS ingestion_baseline_triple_issues(id INTEGER PRIMARY KEY,raw_row TEXT,reason TEXT)"
+    )
+    columns = [r[1] for r in db.execute("PRAGMA table_info(rdf_triples)")]
+    count = 0
+    for row in db.execute(
+        "SELECT t.* FROM rdf_triples t WHERE NOT EXISTS (SELECT 1 FROM documents d WHERE d.doc_id=t.doc_id)"
+    ):
+        data = dict(zip(columns, row, strict=True))
+        db.execute(
+            "INSERT OR IGNORE INTO ingestion_baseline_triple_issues VALUES (?,?,'missing_baseline_document')",
+            (data["id"], json.dumps(data)),
+        )
+        count += 1
+    db.execute(
+        "DELETE FROM rdf_triples WHERE id IN (SELECT id FROM ingestion_baseline_triple_issues)"
+    )
+    return count

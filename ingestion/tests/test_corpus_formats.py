@@ -109,3 +109,18 @@ class FormatTests(unittest.TestCase):
             db = sqlite3.connect(root / "bundle/document_analysis.db")
             self.addCleanup(db.close)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM ingestion_members").fetchone()[0], 2)
+
+    def test_office_zip_is_not_misrepresented_as_paginated_ocr(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "data").mkdir()
+            storage = CorpusStorage(
+                root / "data", create=True, limits=CorpusLimits(reserve_bytes=0)
+            )
+            source = root / "file.docx"
+            with zipfile.ZipFile(source, "w") as z:
+                z.writestr("word/document.xml", "<document>Synthetic</document>")
+            self.assertEqual(
+                parse(storage, source, "inspect"),
+                dict(format="office", pages=0, status="unsupported"),
+            )

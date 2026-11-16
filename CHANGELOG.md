@@ -6,6 +6,27 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Record the authorized real pilot: 215/250 OCR pages before HTTP 429, verified
+  original hashes, 215 matching TXT/SQLite drafts and an explicitly partial
+  private bundle. Preserve upstream data issues and document acceptance gates.
+
+- Keep Office ZIP containers explicitly unsupported instead of treating internal
+  XML as completed page OCR; include GIF raster input.
+
+- Keep SQLite setup/temporary work on the external root, avoid DISTINCT
+  scheduling spill, and stream read-only status counts with bounded memory.
+
+- Keep draft text review state across replanning and count pending OCR separately
+  from pages whose completed transcription requires review.
+
+- Preserve cyclic upstream alias chains as review issues in new corpus bundles,
+  leave their names unresolved, and keep the original baseline unchanged. Retain
+  source edges with missing documents in an explicit issue table, without
+  fabricated documents or disabled foreign-key checks.
+
+- Preserve bounded HTTP error diagnostics and bundle coverage; verify that two
+  invalid evidence answers never create an accepted analysis artifact.
+
 - Evidence prompt v2: retain rejected real-provider outputs and permit one
   budgeted schema/evidence correction without weakening quote/date validation.
 

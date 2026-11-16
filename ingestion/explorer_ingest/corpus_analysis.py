@@ -96,8 +96,8 @@ def plan_analysis(corpus, doc_id, identity, max_bytes=12000, allow_review=False)
     ).fetchone()
     if old and old[0] != plan_id:
         corpus.db.execute(
-            "UPDATE corpus_documents SET analysis_ref=NULL,approved_key=NULL,status='text_ready' WHERE doc_id=?",
-            (doc_id,),
+            "UPDATE corpus_documents SET analysis_ref=NULL,approved_key=NULL,status=? WHERE doc_id=?",
+            ("text_review" if artifact["review_required"] else "text_ready", doc_id),
         )
     corpus.db.execute(
         "INSERT INTO corpus_meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",

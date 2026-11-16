@@ -11,12 +11,14 @@ from .corpus_contracts import document_id, fingerprint
 from .corpus_text import publish_temp
 
 TEXT_SUFFIXES = {".txt", ".md", ".csv", ".tsv", ".json", ".xml", ".dat", ".opt"}
-IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
+IMAGE_SUFFIXES = {".gif", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
 
 
 def non_pdf(request, path, header):
     action = request["action"]
     suffix = path.suffix.lower()
+    if suffix in {".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm", ".odt", ".ods", ".odp"}:
+        return dict(format="office", pages=0, status="unsupported")
     if header.startswith(b"PK"):
         if action == "inspect":
             return dict(format="zip", pages=0, status="container_pending")

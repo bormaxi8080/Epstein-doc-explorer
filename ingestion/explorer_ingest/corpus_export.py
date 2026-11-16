@@ -14,6 +14,8 @@ from .corpus_contracts import fingerprint
 from .corpus_graph import (
     assign_triples,
     initialize_tags,
+    quarantine_baseline_alias_cycles,
+    quarantine_baseline_orphans,
     refresh_graph_sql,
     review_alias,
     review_tag,
@@ -71,6 +73,8 @@ def export_corpus(corpus, output, clusters_path, base_db=None, include_unreviewe
                 parent_id TEXT,name TEXT,doc_id TEXT,sha256 TEXT,bytes INTEGER,depth INTEGER,PRIMARY KEY(parent_id,name));
               CREATE TEMP TABLE seen_triples(key TEXT PRIMARY KEY) WITHOUT ROWID;
             """)
+            quarantined = quarantine_baseline_alias_cycles(db) if base_db else 0
+            orphaned = quarantine_baseline_orphans(db) if base_db else 0
             fallback = initialize_tags(db, clusters_path)
             if corpus.db.execute("SELECT 1 FROM sqlite_master WHERE name='corpus_tags'").fetchone():
                 for tag, cid, origin in corpus.db.execute(
@@ -366,7 +370,12 @@ def export_corpus(corpus, output, clusters_path, base_db=None, include_unreviewe
                 stream.write("]\n")
                 stream.flush()
                 os.fsync(stream.fileno())
+        from .corpus_runtime import read_status
+
         result = dict(
+            corpus_coverage=read_status(corpus.storage.root),
+            quarantined_baseline_aliases=quarantined,
+            quarantined_baseline_triples=orphaned,
             format_version=2,
             new_documents=count,
             include_unreviewed=include_unreviewed,

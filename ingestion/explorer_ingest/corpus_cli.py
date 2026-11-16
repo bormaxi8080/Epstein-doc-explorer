@@ -293,7 +293,7 @@ def main(argv=None):
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.INFO)
     try:
-        with operation_lock(corpus):
+        with operation_lock(corpus), corpus.storage.scratch_environment():
             if args.command == "init":
                 result = corpus.status()
             elif args.command == "import":

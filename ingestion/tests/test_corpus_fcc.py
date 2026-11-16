@@ -67,3 +67,11 @@ class FCCTests(unittest.TestCase):
         with patch("explorer_ingest.corpus_fcc.urllib.request.build_opener") as opener:
             opener.return_value.open.return_value.__enter__.return_value.read.return_value = raw
             self.assertEqual(self.client().generate("Synthetic")["output"], {"synthetic": True})
+
+    def test_http_error_diagnostics_are_retained_without_logging_payload(self):
+        recorded = []
+        client = self.client("failure-500")
+        client.recorder = recorded.append
+        with self.assertRaises(FCCFailure):
+            client.generate("Synthetic")
+        self.assertEqual(json.loads(recorded[0])["http_error"], 500)

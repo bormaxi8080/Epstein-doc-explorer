@@ -20,32 +20,35 @@ class Corpus:
         path = self.storage.path("corpus.sqlite3")
         if not create and not path.exists():
             raise ValueError("Corpus queue is missing; initialize explicitly")
-        self.queue = JobQueue(path)
-        self.storage.bind_queue()
-        self.db = self.queue.db
-        self.db.executescript("""
-          CREATE TABLE IF NOT EXISTS selections(
-            id TEXT PRIMARY KEY, header TEXT NOT NULL, state TEXT NOT NULL,
-            imported INTEGER NOT NULL DEFAULT 0);
-          CREATE TABLE IF NOT EXISTS corpus_documents(
-            doc_id TEXT PRIMARY KEY, sha256 TEXT NOT NULL UNIQUE, bytes INTEGER NOT NULL,
-            format TEXT, status TEXT NOT NULL DEFAULT 'registered', page_count INTEGER,
-            text_ref TEXT, text_sha256 TEXT, analysis_ref TEXT, approved_key TEXT);
-          CREATE TABLE IF NOT EXISTS corpus_sources(
-            id TEXT PRIMARY KEY, doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id),
-            archive_root TEXT NOT NULL, archive_uuid TEXT NOT NULL, relative_path TEXT NOT NULL,
-            metadata TEXT NOT NULL, receipt TEXT NOT NULL, source_sha256 TEXT NOT NULL);
-          CREATE INDEX IF NOT EXISTS corpus_sources_doc ON corpus_sources(doc_id);
-          CREATE TABLE IF NOT EXISTS selection_members(
-            selection_id TEXT NOT NULL REFERENCES selections(id),
-            source_id TEXT NOT NULL REFERENCES corpus_sources(id),
-            PRIMARY KEY(selection_id,source_id));
-          CREATE TABLE IF NOT EXISTS corpus_pages(
-            doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id), page INTEGER NOT NULL,
-            native_ref TEXT, ocr_ref TEXT, selected_ref TEXT, status TEXT NOT NULL DEFAULT 'pending',
-            PRIMARY KEY(doc_id,page));
+        with self.storage.scratch_environment():
+            self.queue = JobQueue(path)
+            self.storage.bind_queue()
+            self.db = self.queue.db
+            self.db.executescript("""
+              CREATE TABLE IF NOT EXISTS selections(
+                id TEXT PRIMARY KEY, header TEXT NOT NULL, state TEXT NOT NULL,
+                imported INTEGER NOT NULL DEFAULT 0);
+              CREATE TABLE IF NOT EXISTS corpus_documents(
+                doc_id TEXT PRIMARY KEY, sha256 TEXT NOT NULL UNIQUE, bytes INTEGER NOT NULL,
+                format TEXT, status TEXT NOT NULL DEFAULT 'registered', page_count INTEGER,
+                text_ref TEXT, text_sha256 TEXT, analysis_ref TEXT, approved_key TEXT);
+              CREATE TABLE IF NOT EXISTS corpus_sources(
+                id TEXT PRIMARY KEY, doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id),
+                archive_root TEXT NOT NULL, archive_uuid TEXT NOT NULL, relative_path TEXT NOT NULL,
+                metadata TEXT NOT NULL, receipt TEXT NOT NULL, source_sha256 TEXT NOT NULL);
+              CREATE INDEX IF NOT EXISTS corpus_sources_doc ON corpus_sources(doc_id);
+              CREATE TABLE IF NOT EXISTS selection_members(
+                selection_id TEXT NOT NULL REFERENCES selections(id),
+                source_id TEXT NOT NULL REFERENCES corpus_sources(id),
+                PRIMARY KEY(selection_id,source_id));
+              CREATE TABLE IF NOT EXISTS corpus_pages(
+                doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id), page INTEGER NOT NULL,
+                native_ref TEXT, ocr_ref TEXT, selected_ref TEXT, status TEXT NOT NULL DEFAULT 'pending',
+                PRIMARY KEY(doc_id,page));
+              CREATE INDEX IF NOT EXISTS corpus_documents_status ON corpus_documents(status);
+          CREATE INDEX IF NOT EXISTS corpus_pages_status ON corpus_pages(status);
           CREATE TABLE IF NOT EXISTS corpus_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-        """)
+            """)
         self.source_cache = {}
 
     def close(self):
@@ -133,9 +136,9 @@ class Corpus:
         self.db.execute("BEGIN IMMEDIATE")
         try:
             for doc in self.db.execute(
-                """SELECT DISTINCT d.* FROM corpus_documents d
-                JOIN corpus_sources s ON s.doc_id=d.doc_id JOIN selection_members m ON m.source_id=s.id
-                WHERE m.selection_id=?""",
+                """SELECT d.* FROM corpus_documents d WHERE EXISTS (
+                SELECT 1 FROM corpus_sources s JOIN selection_members m ON m.source_id=s.id
+                WHERE s.doc_id=d.doc_id AND m.selection_id=?)""",
                 (selection_id,),
             ):
                 key = cache_key("inspect", doc["sha256"], {"inspector": 2})

@@ -31,6 +31,12 @@ def advance_document(corpus, config, doc_id, allow_review=False):
         digest.update(row["selected_ref"].encode())
     if count != doc["page_count"] or (review and not allow_review):
         return 0
+    if doc["text_ref"] and not doc["analysis_ref"]:
+        desired = "text_review" if review else "text_ready"
+        if doc["status"] != desired:
+            corpus.db.execute(
+                "UPDATE corpus_documents SET status=? WHERE doc_id=?", (desired, doc_id)
+            )
     if not doc["text_ref"]:
         payload = dict(doc_id=doc_id, pages_key=digest.hexdigest(), allow_review=allow_review)
         key = fingerprint(["canonical-text-2", doc["sha256"], payload])
