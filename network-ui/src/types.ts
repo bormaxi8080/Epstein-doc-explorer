@@ -15,6 +15,7 @@ export interface Actor {
 }
 
 export interface Stats {
+  yearBounds?: { min: number | null; max: number | null };
   totalDocuments: { count: number };
   totalTriples: { count: number };
   totalActors: { count: number };

@@ -27,8 +27,11 @@ class JobQueue:
             max_attempts INTEGER NOT NULL, available_at REAL NOT NULL DEFAULT 0,
             owner TEXT, token TEXT, lease_until REAL, result TEXT, error TEXT);
           CREATE INDEX IF NOT EXISTS jobs_ready ON jobs(status,available_at,stage);
+          CREATE INDEX IF NOT EXISTS jobs_claim_all ON jobs(status,available_at);
+          CREATE INDEX IF NOT EXISTS jobs_claim_stage ON jobs(status,stage,available_at);
           CREATE TABLE IF NOT EXISTS job_retry_grants(
             seq INTEGER PRIMARY KEY,job_id TEXT,extra INTEGER,reason TEXT,at REAL);
+          CREATE INDEX IF NOT EXISTS job_retry_job ON job_retry_grants(job_id);
           CREATE TABLE IF NOT EXISTS job_events(
             seq INTEGER PRIMARY KEY, at REAL NOT NULL, job_id TEXT NOT NULL,
             event TEXT NOT NULL, detail TEXT);
@@ -50,7 +53,7 @@ class JobQueue:
             raise ValueError("Job identity collides with different immutable inputs")
         return key
 
-    def claim(self, owner, stage=None, lease_seconds=600, now=None):
+    def claim(self, owner, stage=None, lease_seconds=600, now=None, job_id=None):
         now = time.time() if now is None else now
         if not owner or not 1 <= lease_seconds <= 3600 or (stage and stage not in STAGES):
             raise ValueError("Invalid worker lease")
@@ -62,11 +65,25 @@ class JobQueue:
                 WHERE status='running' AND lease_until<=?""",
                 (now,),
             )
-            row = self.db.execute(
-                """SELECT * FROM jobs WHERE status IN ('pending','retry')
-                AND available_at<=? AND (? IS NULL OR stage=?) ORDER BY rowid LIMIT 1""",
-                (now, stage, stage),
-            ).fetchone()
+            row = None
+            for state in ("retry", "pending"):
+                if job_id:
+                    row = self.db.execute(
+                        "SELECT * FROM jobs WHERE id=? AND status=? AND available_at<=? AND (? IS NULL OR stage=?)",
+                        (job_id, state, now, stage, stage),
+                    ).fetchone()
+                elif stage:
+                    row = self.db.execute(
+                        "SELECT * FROM jobs WHERE status=? AND stage=? AND available_at<=? ORDER BY available_at,rowid LIMIT 1",
+                        (state, stage, now),
+                    ).fetchone()
+                else:
+                    row = self.db.execute(
+                        "SELECT * FROM jobs WHERE status=? AND available_at<=? ORDER BY available_at,rowid LIMIT 1",
+                        (state, now),
+                    ).fetchone()
+                if row:
+                    break
             if row is None:
                 self.db.commit()
                 return None

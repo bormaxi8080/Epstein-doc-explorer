@@ -138,9 +138,13 @@ class Corpus:
                 WHERE m.selection_id=?""",
                 (selection_id,),
             ):
-                key = cache_key("inspect", doc["sha256"], {"inspector": 1})
+                key = cache_key("inspect", doc["sha256"], {"inspector": 2})
                 self.queue.enqueue(key, "inspect", {"doc_id": doc["doc_id"]})
                 count += 1
+                if count % 5000 == 0:
+                    self.storage.check()
+                    self.db.commit()
+                    self.db.execute("BEGIN IMMEDIATE")
             self.db.commit()
         except BaseException:
             self.db.rollback()
@@ -217,7 +221,7 @@ class Corpus:
         self.db.execute("BEGIN IMMEDIATE")
         try:
             self.db.execute(
-                "UPDATE corpus_documents SET format=?,status=?,page_count=? WHERE doc_id=?",
+                "UPDATE corpus_documents SET format=?,status=CASE WHEN text_ref IS NULL THEN ? ELSE status END,page_count=? WHERE doc_id=?",
                 (info["format"], info["status"], count, doc_id),
             )
             self.db.executemany(

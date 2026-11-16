@@ -270,6 +270,7 @@ export default function DocumentModal({ docId, highlightTerm, secondaryHighlight
             </div>
           )}
 
+          {documentText.length >= 200000 && <p className="text-amber-300">Text preview. Open Documents for page-by-page text and evidence.</p>}
           {!loading && !error && documentText && (
             <div className="prose prose-invert max-w-none">
               <div className="whitespace-pre-wrap text-gray-300 leading-relaxed font-mono text-sm">

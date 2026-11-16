@@ -49,3 +49,15 @@ class QueueTests(unittest.TestCase):
             self.assertIsNone(q.claim("worker", now=100))
             self.assertEqual(q.status()["states"], {"failed": 1})
             self.assertFalse(q.status()["complete"])
+
+    def test_targeted_recovery_does_not_claim_other_work(self):
+        with tempfile.TemporaryDirectory() as d:
+            q = JobQueue(Path(d) / "queue.sqlite3")
+            self.addCleanup(q.close)
+            q.enqueue("first", "ocr", {})
+            q.enqueue("second", "ocr", {})
+            job = q.claim("test", job_id="second", now=1)
+            self.assertEqual(job["id"], "second")
+            q.finish(job["id"], job["token"], {}, now=2)
+            self.assertIsNone(q.claim("test", job_id="second", now=3))
+            self.assertEqual(q.claim("test", now=3)["id"], "first")

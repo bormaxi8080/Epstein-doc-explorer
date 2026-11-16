@@ -40,3 +40,30 @@ class FCCTests(unittest.TestCase):
             self.client(max_response_bytes=1).generate("Transcribe.", b"jpeg")
         with self.assertRaises(ValueError):
             FCCConfig("model", "revision", base_url="http://outside.invalid")
+
+    def test_envelope_is_recorded_once_before_structured_validation(self):
+        from unittest.mock import patch
+
+        recorded = []
+        client = self.client()
+        client.recorder = recorded.append
+        with patch("explorer_ingest.corpus_fcc.urllib.request.build_opener") as opener:
+            opener.return_value.open.return_value.__enter__.return_value.read.return_value = (
+                b"invalid-envelope"
+            )
+            with self.assertRaises(FCCFailure):
+                client.generate("Synthetic")
+        self.assertEqual(recorded, [b"invalid-envelope"])
+
+    def test_complete_fenced_json_without_prose_is_accepted(self):
+        from unittest.mock import patch
+
+        raw = json.dumps(
+            {
+                "stop_reason": "end_turn",
+                "content": [{"type": "text", "text": '```json\n{"synthetic": true}\n```'}],
+            }
+        ).encode()
+        with patch("explorer_ingest.corpus_fcc.urllib.request.build_opener") as opener:
+            opener.return_value.open.return_value.__enter__.return_value.read.return_value = raw
+            self.assertEqual(self.client().generate("Synthetic")["output"], {"synthetic": True})

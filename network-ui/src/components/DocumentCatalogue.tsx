@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-const API=import.meta.env.VITE_API_URL || '/api';
+import { API_BASE as API } from '../api';
 async function read(url:string,signal?:AbortSignal) {
   const r=await fetch(API+url,{signal});if(!r.ok)throw new Error('Document request failed');return r.json();
 }

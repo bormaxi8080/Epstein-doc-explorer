@@ -47,6 +47,8 @@ export default function Sidebar({
   keywords,
   onKeywordsChange
 }: SidebarProps) {
+  const yearMin=stats?.yearBounds?.min ?? 1900;
+  const yearMax=Math.max(yearMin+1,stats?.yearBounds?.max ?? new Date().getFullYear());
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Actor[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -146,8 +148,8 @@ export default function Sidebar({
     const sliderWidth = rect.width;
 
     // Calculate positions of the two handles as percentages
-    const minPosition = ((localYearRange[0] - 1970) / (2025 - 1970)) * sliderWidth;
-    const maxPosition = ((localYearRange[1] - 1970) / (2025 - 1970)) * sliderWidth;
+    const minPosition = ((localYearRange[0] - yearMin) / (yearMax - yearMin)) * sliderWidth;
+    const maxPosition = ((localYearRange[1] - yearMin) / (yearMax - yearMin)) * sliderWidth;
 
     // Calculate distance from mouse to each handle
     const distanceToMin = Math.abs(mouseX - minPosition);
@@ -336,15 +338,15 @@ export default function Sidebar({
                 </label>
                 <div className="relative pt-1">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>1970</span>
-                    <span>2025</span>
+                    <span>{yearMin}</span>
+                    <span>{yearMax}</span>
                   </div>
                   <div className="relative h-6" onMouseMove={handleSliderMouseMove}>
                     {/* Max year slider */}
                     <input
                       type="range"
-                      min="1970"
-                      max="2025"
+                      min={yearMin}
+                      max={yearMax}
                       step="1"
                       value={localYearRange[1]}
                       onChange={(e) => {
@@ -362,8 +364,8 @@ export default function Sidebar({
                     {/* Min year slider */}
                     <input
                       type="range"
-                      min="1970"
-                      max="2025"
+                      min={yearMin}
+                      max={yearMax}
                       step="1"
                       value={localYearRange[0]}
                       onChange={(e) => {
@@ -383,8 +385,8 @@ export default function Sidebar({
                       <div
                         className="absolute h-2 bg-blue-600 rounded-lg"
                         style={{
-                          left: `${((localYearRange[0] - 1970) / (2025 - 1970)) * 100}%`,
-                          right: `${100 - ((localYearRange[1] - 1970) / (2025 - 1970)) * 100}%`,
+                          left: `${((localYearRange[0] - yearMin) / (yearMax - yearMin)) * 100}%`,
+                          right: `${100 - ((localYearRange[1] - yearMin) / (yearMax - yearMin)) * 100}%`,
                         }}
                       />
                     </div>

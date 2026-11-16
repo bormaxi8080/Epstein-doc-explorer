@@ -11,6 +11,7 @@ from pathlib import Path
 
 from explorer_ingest.corpus_contracts import document_id
 from explorer_ingest.corpus_export import export_corpus
+from explorer_ingest.corpus_graph import initialize_tags, review_alias, review_tag
 from explorer_ingest.corpus_ocr import select_page
 from explorer_ingest.corpus_registry import Corpus
 from explorer_ingest.corpus_storage import CorpusLimits
@@ -36,6 +37,11 @@ class ExportTests(unittest.TestCase):
             assemble_text(c, doc)
             clusters = root / "clusters.json"
             clusters.write_text(json.dumps([dict(id=0, name="Base", tags=["tag"], exemplars=[])]))
+            initialize_tags(c.db, clusters)
+            review_tag(c.db, "reviewed-new-tag", 0, "Synthetic reviewed assignment")
+            review_alias(
+                c.db, "Synthetic spelling", "Synthetic canonical", "Synthetic reviewed alias"
+            )
             baseline = root / "base.db"
             db = sqlite3.connect(baseline)
             db.executescript(SCHEMA)
@@ -56,6 +62,8 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(empty["new_documents"], 0)
             result = export_corpus(c, root / "private", clusters, baseline, include_unreviewed=True)
             self.assertEqual(result["new_documents"], 1)
+            exported_clusters = json.loads((root / "private/tag_clusters.json").read_text())
+            self.assertIn("reviewed-new-tag", exported_clusters[0]["tags"])
             self.assertEqual(digest_file(baseline), sha)
             db = sqlite3.connect(root / "private/document_analysis.db")
             full, path = db.execute(
@@ -98,6 +106,15 @@ class ExportTests(unittest.TestCase):
                             if process.poll() is not None:
                                 self.fail("API process exited")
                             time.sleep(0.05)
+                    request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/health",
+                        headers={"Origin": f"http://127.0.0.1:{port}"},
+                    )
+                    with urllib.request.urlopen(request, timeout=10) as response:
+                        self.assertEqual(
+                            response.headers["Access-Control-Allow-Origin"],
+                            f"http://127.0.0.1:{port}",
+                        )
                     catalogue = read("/api/documents?q=Unicode")
                     self.assertEqual(catalogue["documents"][0]["doc_id"], doc)
                     self.assertEqual(

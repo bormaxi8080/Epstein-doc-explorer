@@ -43,3 +43,19 @@ class StorageTests(unittest.TestCase):
             outside.symlink_to("/tmp")
             with self.assertRaises(ValueError):
                 s.path("bad/file")
+
+    def test_aggregate_scratch_reservations_include_stale_files(self):
+        with tempfile.TemporaryDirectory() as d:
+            storage = CorpusStorage(
+                d,
+                create=True,
+                limits=CorpusLimits(reserve_bytes=0, max_scratch_bytes=100, max_artifact_bytes=20),
+            )
+            with storage.temporary(expected_bytes=70):
+                with self.assertRaisesRegex(ValueError, "scratch"):
+                    with storage.temporary(expected_bytes=31):
+                        pass
+            storage.path("tmp/stale").write_bytes(b"x" * 80)
+            with self.assertRaisesRegex(ValueError, "scratch"):
+                with storage.temporary(expected_bytes=21):
+                    pass

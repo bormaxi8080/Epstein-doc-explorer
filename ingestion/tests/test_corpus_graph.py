@@ -20,11 +20,18 @@ class GraphTests(unittest.TestCase):
             review_alias(db, "C", "B", "cycle")
         with self.assertRaises(ValueError):
             review_alias(db, "unknown person", "A", "unsafe")
+        review_alias(db, "C", "D", "Second reviewed spelling")
         refresh_graph_sql(db)
         distances = dict(
             db.execute("SELECT canonical_name,hop_distance_from_principal FROM canonical_entities")
         )
-        self.assertEqual(distances["C"], 2)
+        self.assertEqual(distances["D"], 2)
+        self.assertEqual(
+            db.execute(
+                "SELECT canonical_name FROM entity_aliases WHERE original_name='B'"
+            ).fetchone()[0],
+            "D",
+        )
         self.assertEqual(distances["X"], 1000)
         self.assertNotIn("unknown person", distances)
         self.assertNotEqual(scoped_name("redacted", "d1"), scoped_name("redacted", "d2"))

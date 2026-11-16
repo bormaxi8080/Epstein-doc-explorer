@@ -26,7 +26,10 @@ class TextTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "incomplete"):
                 assemble_text(c, doc)
             select_page(c, doc, 2, "Вторая страница", "native", {})
+            # Another worker's small raster scratch must not block a tiny TXT.
+            c.storage.path("tmp/other-worker.jpg").write_bytes(b"x" * 1024)
             reference = assemble_text(c, doc)
+            c.storage.path("tmp/other-worker.jpg").unlink()
             artifact, path = read_text_artifact(c, doc)
             text = path.read_text()
             self.assertEqual(text, "[Page 1]\nFirst page 😀\n\n[Page 2]\nВторая страница")

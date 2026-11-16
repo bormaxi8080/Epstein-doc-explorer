@@ -7,12 +7,12 @@ import fs from 'fs';
 import path from 'path';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT || 3001);
 const DB_PATH = process.env.DB_PATH || 'document_analysis.db';
 const DB_READONLY = process.env.DB_READONLY !== 'false';
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS && process.env.ALLOWED_ORIGINS.trim())
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173', 'http://localhost:3000', 'https://epsteinvisualizer.com', 'https://www.epsteinvisualizer.com'];
+  : [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`, 'http://localhost:5173', 'http://localhost:3000', 'https://epsteinvisualizer.com', 'https://www.epsteinvisualizer.com'];
 
 console.log('Allowed CORS origins:', ALLOWED_ORIGINS);
 
@@ -79,16 +79,16 @@ try {
   process.exit(1);
 }
 
-// Load tag clusters with error handling
+// New bundles serve cluster metadata from SQLite without loading every tag.
 let tagClusters: any[] = [];
 try {
-  const clustersPath = process.env.TAG_CLUSTERS_PATH || path.join(process.cwd(), 'tag_clusters.json');
-  tagClusters = JSON.parse(fs.readFileSync(clustersPath, 'utf-8'));
-  console.log(`✓ Loaded ${tagClusters.length} tag clusters`);
-} catch (error) {
-  console.error('Failed to load tag clusters:', error);
-  tagClusters = [];
-}
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE name='corpus_clusters'").get()) {
+    tagClusters=(db.prepare(`SELECT c.id,c.name,c.exemplars,(SELECT COUNT(*) FROM corpus_tags t WHERE t.cluster_id=c.id) AS tagCount FROM corpus_clusters c ORDER BY c.id`).all() as any[])
+      .map(c=>({...c,exemplars:JSON.parse(c.exemplars)}));
+  } else {
+    tagClusters=JSON.parse(fs.readFileSync(process.env.TAG_CLUSTERS_PATH || path.join(process.cwd(),'tag_clusters.json'),'utf8'));
+  }
+} catch (error) {console.error('Cluster metadata unavailable',error);}
 
 // Get all actors (nodes) with alias resolution
 app.get('/api/actors', (req, res) => {
@@ -231,6 +231,7 @@ app.get('/api/stats', (req, res) => {
         FROM rdf_triples rt
         LEFT JOIN entity_aliases ea ON rt.actor = ea.original_name
       `).get(),
+      yearBounds: db.prepare("SELECT MIN(CAST(substr(timestamp,1,4) AS INTEGER)) AS min,MAX(CAST(substr(timestamp,1,4) AS INTEGER)) AS max FROM rdf_triples WHERE timestamp IS NOT NULL").get(),
       categories: db.prepare(`
         SELECT category, COUNT(*) as count
         FROM documents
@@ -410,7 +411,7 @@ app.get('/api/tag-clusters', (req, res) => {
       id: cluster.id,
       name: cluster.name,
       exemplars: cluster.exemplars,
-      tagCount: cluster.tags.length
+      tagCount: cluster.tagCount ?? cluster.tags.length
     }));
     res.json(clusters);
   } catch (error) {
@@ -448,7 +449,7 @@ if (fs.existsSync(frontendPath)) {
   console.log(`⚠ Frontend build not found at ${frontendPath}`);
 }
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`\n🚀 API Server running at http://localhost:${PORT}`);
   console.log(`📊 Network UI will connect to this server\n`);
 });

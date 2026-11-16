@@ -66,6 +66,22 @@ class AnalysisTests(unittest.TestCase):
             self.assertEqual(assemble_analysis(c, doc, client), ref)
             self.assertEqual(client.calls, calls)
             self.assertEqual(approve(c, doc), ref["sha256"])
+            manifest = c.storage.get(ref)
+            self.assertIn("summary_ref", manifest)
+            plan_analysis(c, doc, {"model": "changed"}, 500)
+            self.assertIsNone(c.document(doc)["approved_key"])
+            with self.assertRaisesRegex(ValueError, "provider/text"):
+                assemble_analysis(c, doc, client)
+            active = c.db.execute(
+                "SELECT value FROM corpus_meta WHERE key=?", ("analysis_plan:" + doc,)
+            ).fetchone()[0]
+            root = c.db.execute(
+                "SELECT job_id FROM corpus_plan_roots WHERE plan_id=? LIMIT 1", (active,)
+            ).fetchone()[0]
+            payload = json.loads(
+                c.db.execute("SELECT payload FROM jobs WHERE id=?", (root,)).fetchone()[0]
+            )
+            self.assertEqual(payload["provider"], {"model": "changed"})
             select_page(c, doc, 1, "Changed", "native", {})
             self.assertIsNone(c.document(doc)["approved_key"])
 
@@ -91,3 +107,25 @@ class AnalysisTests(unittest.TestCase):
                 provider=Truncated().identity(),
             )
             self.assertEqual(len(analyze_fragment(c, payload, Truncated())["split"]), 2)
+
+    def test_private_review_analysis_cannot_be_publicly_approved(self):
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            doc = document_id("f" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes) VALUES (?,?,1)", (doc, "f" * 64)
+            )
+            c.inspected(doc, dict(format="pdf", status="inspected", pages=1))
+            select_page(c, doc, 1, "Synthetic stamp", "fcc_ocr", {}, issues=["review_photo"])
+            assemble_text(c, doc, allow_review=True)
+            with self.assertRaises(ValueError):
+                plan_analysis(c, doc, Client().identity())
+            plan_analysis(c, doc, Client().identity(), allow_review=True)
+            job = c.queue.claim("test", "analyze")
+            result = analyze_fragment(c, json.loads(job["payload"]), Client())
+            c.queue.finish(job["id"], job["token"], result)
+            ref = assemble_analysis(c, doc, Client(), allow_review=True)
+            self.assertEqual(c.storage.get(ref)["review_required"], 1)
+            with self.assertRaisesRegex(ValueError, "reviewed"):
+                approve(c, doc)

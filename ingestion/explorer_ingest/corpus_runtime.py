@@ -1,5 +1,7 @@
 """Explicit operational configuration, free-route admission and honest coverage."""
 
+import base64
+import hashlib
 import json
 import os
 import time
@@ -21,6 +23,8 @@ class RunConfig:
     model: str
     routing_revision: str
     base_url: str = "http://127.0.0.1:8082"
+    request_timeout: float = 120
+    max_output_tokens: int = 8192
     max_calls_per_run: int = 300
     max_calls_total: int = 1000
     minimum_call_interval: float = 5
@@ -40,11 +44,19 @@ class RunConfig:
             or not 128 <= self.max_fragment_bytes <= 24000
         ):
             raise ValueError("Invalid call/render/fragment budgets")
+        if not 1 <= self.request_timeout <= 300 or not 128 <= self.max_output_tokens <= 16384:
+            raise ValueError("Invalid FCC timeout/output budget")
         CorpusLimits(**self.limits)
         self.fcc()
 
     def fcc(self):
-        return FCCConfig(self.model, self.routing_revision, self.base_url)
+        return FCCConfig(
+            self.model,
+            self.routing_revision,
+            self.base_url,
+            timeout=self.request_timeout,
+            max_tokens=self.max_output_tokens,
+        )
 
     @classmethod
     def load(cls, path):
@@ -110,7 +122,14 @@ class CallBudget:
         self.calls += 1
 
     def record(self, raw):
-        ref = self.corpus.storage.put("fcc-envelope", json.loads(raw))
+        ref = self.corpus.storage.put(
+            "fcc-envelope",
+            {
+                "encoding": "base64",
+                "body": base64.b64encode(raw).decode("ascii"),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+            },
+        )
         if self.current is not None:
             self.corpus.db.execute(
                 "UPDATE corpus_model_calls SET raw_ref=? WHERE id=?",
@@ -167,10 +186,19 @@ def read_status(root):
         unfinished = sum(v for k, v in jobs.items() if k not in ("done", "superseded"))
         complete = (
             bool(counts[0])
-            and counts[0] == counts[3]
+            and counts[0] - docs.get("container_expanded", 0) == counts[3]
             and not (unfinished or unsupported or missing_pages or review or counts[4])
         )
+        selections = [
+            dict(scope=json.loads(header)["scope"], state=state, files=imported)
+            for header, state, imported in db.execute(
+                "SELECT header,state,imported FROM selections"
+            )
+        ]
         result = dict(
+            selections=selections,
+            full_archive_complete=complete
+            and any(r["scope"] == "full" and r["state"] == "complete" for r in selections),
             uuid=marker["uuid"],
             documents=docs,
             pages=pages,

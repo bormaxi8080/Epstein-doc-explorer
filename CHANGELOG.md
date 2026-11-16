@@ -6,6 +6,11 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Integration hardening: versioned analysis plans across model/chunk changes,
+  synthesis input lineage, aggregate scratch reservations, disk ZIP manifests,
+  alias/API consistency, data-derived UI date ranges, same-origin local CORS,
+  targeted retries and indexed million-job claim selection.
+
 - Corpus stage 15: explicit external-root workflow CLI, verified free-only FCC
   admission, durable call caps, cooperative pause, rotating logs and read-only
   coverage/status gates. Preserve invalid provider envelopes for diagnosis.

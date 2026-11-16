@@ -11,7 +11,14 @@ from pathlib import Path
 
 from .corpus_analysis import analyzed_chunks
 from .corpus_contracts import fingerprint
-from .corpus_graph import assign_triples, initialize_tags, refresh_graph_sql, scoped_name
+from .corpus_graph import (
+    assign_triples,
+    initialize_tags,
+    refresh_graph_sql,
+    review_alias,
+    review_tag,
+    scoped_name,
+)
 from .corpus_text import pages, read_text_artifact
 from .export import SCHEMA
 from .state import atomic_json, digest_file, readonly_db
@@ -19,7 +26,7 @@ from .state import atomic_json, digest_file, readonly_db
 
 def export_corpus(corpus, output, clusters_path, base_db=None, include_unreviewed=False):
     output = Path(output).absolute()
-    if output.exists() or not output.parent.is_dir():
+    if output.exists() or output.is_symlink() or not output.parent.is_dir():
         raise ValueError("Bundle needs a new path under an existing external parent")
     checkout = Path(__file__).resolve().parents[2]
     parent = output.parent.resolve(strict=True)
@@ -52,9 +59,40 @@ def export_corpus(corpus, output, clusters_path, base_db=None, include_unreviewe
               CREATE TABLE IF NOT EXISTS ingestion_pages(doc_id TEXT,page INTEGER,text TEXT,
                 quality TEXT,method TEXT,provenance TEXT,PRIMARY KEY(doc_id,page));
               CREATE TABLE IF NOT EXISTS ingestion_texts(doc_id TEXT PRIMARY KEY,path TEXT,sha256 TEXT,pages INTEGER);
+              CREATE TABLE IF NOT EXISTS ingestion_analysis_chunks(
+                doc_id TEXT,sequence INTEGER,page INTEGER,start INTEGER,end INTEGER,chunk_key TEXT,
+                provider TEXT,prompt_version TEXT,reported_model TEXT,usage TEXT,response_sha256 TEXT,
+                PRIMARY KEY(doc_id,sequence));
+              CREATE TABLE IF NOT EXISTS ingestion_evidence_spans(
+                triple_id INTEGER PRIMARY KEY,start INTEGER,end INTEGER,matches INTEGER,offset_unit TEXT);
+              CREATE TABLE IF NOT EXISTS ingestion_archive_sources(
+                id TEXT PRIMARY KEY,doc_id TEXT,archive_uuid TEXT,relative_path TEXT,metadata TEXT,receipt TEXT,source_sha256 TEXT);
+              CREATE TABLE IF NOT EXISTS ingestion_members(
+                parent_id TEXT,name TEXT,doc_id TEXT,sha256 TEXT,bytes INTEGER,depth INTEGER,PRIMARY KEY(parent_id,name));
               CREATE TEMP TABLE seen_triples(key TEXT PRIMARY KEY) WITHOUT ROWID;
             """)
             fallback = initialize_tags(db, clusters_path)
+            if corpus.db.execute("SELECT 1 FROM sqlite_master WHERE name='corpus_tags'").fetchone():
+                for tag, cid, origin in corpus.db.execute(
+                    "SELECT tag,cluster_id,origin FROM corpus_tags WHERE origin LIKE 'review:%'"
+                ):
+                    expected = corpus.db.execute(
+                        "SELECT name FROM corpus_clusters WHERE id=?", (cid,)
+                    ).fetchone()
+                    actual = db.execute(
+                        "SELECT name FROM corpus_clusters WHERE id=?", (cid,)
+                    ).fetchone()
+                    if not expected or not actual or expected[0] != actual[0]:
+                        raise ValueError("Reviewed cluster dictionary mismatch")
+                    review_tag(db, tag, cid, origin[7:])
+            if corpus.db.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='entity_aliases'"
+            ).fetchone():
+                for original, canonical, reason in corpus.db.execute(
+                    "SELECT original_name,canonical_name,reasoning FROM entity_aliases"
+                ):
+                    review_alias(db, original, canonical, reason)
+
             now = datetime.now(timezone.utc).isoformat()
             for doc in corpus.db.execute(
                 "SELECT * FROM corpus_documents WHERE text_ref IS NOT NULL ORDER BY doc_id"
@@ -175,9 +213,71 @@ def export_corpus(corpus, output, clusters_path, base_db=None, include_unreviewe
                             source["metadata"],
                         ),
                     )
+                members = corpus.db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name='corpus_members'"
+                ).fetchone()
+                ancestry = (
+                    "WITH RECURSIVE ancestry(doc_id) AS (SELECT ? UNION SELECT m.parent_id FROM corpus_members m JOIN ancestry a ON m.doc_id=a.doc_id) "
+                    if members
+                    else "WITH ancestry(doc_id) AS (SELECT ?) "
+                )
+                for source in corpus.db.execute(
+                    ancestry
+                    + "SELECT s.* FROM corpus_sources s JOIN ancestry a ON a.doc_id=s.doc_id",
+                    (doc["doc_id"],),
+                ):
+                    db.execute(
+                        "INSERT OR IGNORE INTO ingestion_archive_sources VALUES (?,?,?,?,?,?,?)",
+                        (
+                            source["id"],
+                            source["doc_id"],
+                            source["archive_uuid"],
+                            source["relative_path"],
+                            source["metadata"],
+                            source["receipt"],
+                            source["source_sha256"],
+                        ),
+                    )
+                if members:
+                    for member in corpus.db.execute(
+                        ancestry
+                        + "SELECT m.* FROM corpus_members m JOIN ancestry a ON a.doc_id=m.doc_id",
+                        (doc["doc_id"],),
+                    ):
+                        db.execute(
+                            "INSERT OR IGNORE INTO ingestion_members VALUES (?,?,?,?,?,?)",
+                            (
+                                member["parent_id"],
+                                member["name"],
+                                member["doc_id"],
+                                member["sha256"],
+                                member["bytes"],
+                                member["depth"],
+                            ),
+                        )
                 db.execute("DELETE FROM seen_triples")
                 sequence = 0
-                for chunk in analyzed_chunks(corpus, manifest) if manifest else ():
+                for chunk_index, chunk in enumerate(
+                    analyzed_chunks(corpus, manifest) if manifest else ()
+                ):
+                    payload = chunk["payload"]
+                    db.execute(
+                        "INSERT INTO ingestion_analysis_chunks VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        (
+                            doc["doc_id"],
+                            chunk_index,
+                            payload["page"],
+                            payload["start"],
+                            payload["start"] + len(payload["text"]),
+                            fingerprint(payload),
+                            json.dumps(chunk.get("provider", payload["provider"])),
+                            payload["prompt"],
+                            chunk.get("reported_model"),
+                            json.dumps(chunk.get("usage", {})),
+                            chunk.get("response_sha256"),
+                        ),
+                    )
+
                     for triple in chunk["output"]["rdf_triples"]:
                         key = fingerprint(triple)
                         if not db.execute(
@@ -207,6 +307,23 @@ def export_corpus(corpus, output, clusters_path, base_db=None, include_unreviewe
                                 triple["evidence"]["quote"],
                                 triple["assertion_type"],
                                 fingerprint(chunk["payload"]),
+                            ),
+                        )
+                        quote = triple["evidence"]["quote"]
+                        matches = payload["text"].count(quote)
+                        start = (
+                            payload["start"] + payload["text"].index(quote)
+                            if matches == 1
+                            else None
+                        )
+                        db.execute(
+                            "INSERT INTO ingestion_evidence_spans VALUES (?,?,?,?,?)",
+                            (
+                                cur.lastrowid,
+                                start,
+                                start + len(quote) if start is not None else None,
+                                matches,
+                                "unicode_codepoint",
                             ),
                         )
                         sequence += 1

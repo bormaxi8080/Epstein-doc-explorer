@@ -52,6 +52,7 @@ function App() {
           setTagClusters(clusters);
           setEnabledClusterIds(new Set(clusters.map(c => c.id)));
           setStats(statsData);
+          if (statsData.yearBounds?.min && statsData.yearBounds?.max) setYearRange([statsData.yearBounds.min, statsData.yearBounds.max]);
           setEnabledCategories(new Set(statsData.categories.map(c => c.category)));
           setIsInitialized(true);
         });

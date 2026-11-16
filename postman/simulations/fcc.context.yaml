@@ -17,12 +17,12 @@ assumptions:
     source: https://github.com/anthropics/anthropic-sdk-ruby/blob/main/lib/anthropic/models/message_create_params.rb
     updated_at: '2026-11-02'
   - id: fcc-messages-compatibility
-    status: unknown
-    claim: The user's installed FCC accepts the implemented Messages subset.
-    reason: The local stand-in models the public Messages shape, not the installed proxy.
-    verification: Public FCC README inspected on 2026-11-02; installed FCC has not been called.
-    source: ingestion/explorer_ingest/provider.py; https://github.com/Alishahryar1/free-claude-code
-    updated_at: '2026-11-02'
+    status: supported
+    claim: Installed FCC 5.14.7 accepts the corpus text/image Messages subset on the explicitly tested Ling free route.
+    reason: A real synthetic-image smoke matched SYNTHETIC OCR 12345; the separately authorized real PDF pilot has produced valid OCR responses.
+    verification: On 2026-11-16, used the explicit inclusionai/ling-3.2-flash:free route, validated zero prompt/completion catalogue prices, and retained response model/usage externally. This does not independently attest the actual upstream backend or establish transcription accuracy.
+    source: ingestion/explorer_ingest/corpus_fcc.py; https://github.com/Alishahryar1/free-claude-code
+    updated_at: '2026-11-16'
   - id: corpus-multimodal-caller
     status: supported
     claim: The corpus caller sends base64 image blocks, retains usage and rejects truncated, malformed and failed responses against the local stand-in.

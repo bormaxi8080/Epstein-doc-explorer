@@ -87,6 +87,8 @@ def expand_worker(request, path):
         if len(members) > 1000:
             raise ValueError("ZIP member count exceeds budget")
         for info in members:
+            if len(info.filename) > 1024:
+                raise ValueError("ZIP member name too long")
             if info.is_dir():
                 continue
             name = PurePosixPath(info.filename)
@@ -122,7 +124,9 @@ def expand_worker(request, path):
             entries.append(
                 dict(name=info.filename, path=output.name, bytes=written, sha256=digest.hexdigest())
             )
-    return dict(format="zip", members=entries, expanded_bytes=total)
+    manifest = target / "manifest.json"
+    manifest.write_text(json.dumps(dict(format="zip", members=entries, expanded_bytes=total)))
+    return dict(format="zip", manifest="manifest.json", count=len(entries))
 
 
 def expand_container(corpus, doc_id, max_depth=3):
@@ -144,7 +148,12 @@ def expand_container(corpus, doc_id, max_depth=3):
     if parent >= max_depth:
         raise ValueError("Nested container depth exceeded")
     limits = corpus.storage.limits
-    with corpus.original(doc_id) as original, corpus.storage.temporary(".members") as temporary:
+    with (
+        corpus.original(doc_id) as original,
+        corpus.storage.temporary(
+            ".members", min(limits.max_scratch_bytes // 2, limits.max_input_bytes)
+        ) as temporary,
+    ):
         try:
             with corpus.storage.scratch_environment():
                 result = run_limited(
@@ -166,12 +175,13 @@ def expand_container(corpus, doc_id, max_depth=3):
                     ),
                     corpus.storage.check,
                 )
+            result = json.loads((temporary / "manifest.json").read_text())
             for entry in result["members"]:
                 source = temporary / entry["path"]
                 sha = entry["sha256"]
                 child = document_id(sha)
                 # Move through managed top-level scratch so publication checks remain shared.
-                with corpus.storage.temporary(source.suffix) as staged:
+                with corpus.storage.temporary(source.suffix, max(1, entry["bytes"])) as staged:
                     source.replace(staged)
                     ref = publish_temp(
                         corpus.storage, staged, f"members/{sha[:2]}/{sha}{source.suffix}", sha
@@ -195,4 +205,5 @@ def expand_container(corpus, doc_id, max_depth=3):
             return corpus.storage.put("container", result)
         finally:
             if temporary.is_dir():
+                corpus.storage.guard()
                 shutil.rmtree(temporary)

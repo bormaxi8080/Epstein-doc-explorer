@@ -55,6 +55,7 @@ class CorpusStorage:
         ):
             raise ValueError("Invalid corpus identity")
         self.queue_identity = None
+        self.scratch_reservations = {}
         self.mkdir("tmp")
         self.check()
 
@@ -130,16 +131,26 @@ class CorpusStorage:
         return json.loads(path.read_text())
 
     @contextmanager
-    def temporary(self, suffix=".tmp"):
+    def temporary(self, suffix=".tmp", expected_bytes=None):
         self.check()
         scratch = self.path("tmp")
-        used = sum(p.stat().st_size for p in scratch.iterdir() if p.is_file())
-        if used >= self.limits.max_scratch_bytes:
+        capacity = self.limits.max_artifact_bytes if expected_bytes is None else expected_bytes
+        if capacity < 1:
+            raise ValueError("Invalid scratch reservation")
+        used = sum(
+            p.stat().st_size
+            for p in scratch.rglob("*")
+            if p.is_file() and not any(a == p or a in p.parents for a in self.scratch_reservations)
+        )
+        used += sum(self.scratch_reservations.values())
+        if used + capacity > self.limits.max_scratch_bytes:
             raise ValueError("Corpus scratch budget exhausted")
         path = self.path("tmp/" + uuid.uuid4().hex + suffix)
+        self.scratch_reservations[path] = capacity
         try:
             yield path
         finally:
+            self.scratch_reservations.pop(path, None)
             if path.exists() and self.root.exists():
                 self.guard()
                 path.unlink()

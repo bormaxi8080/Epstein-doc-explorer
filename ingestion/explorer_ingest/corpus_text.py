@@ -55,7 +55,25 @@ def assemble_text(corpus, doc_id, allow_review=False):
     storage = corpus.storage
     digest = hashlib.sha256()
     count = offset = review = 0
-    with storage.temporary(".txt") as temporary, storage.temporary(".jsonl") as map_file:
+    # Reserve from immutable page JSON sizes, not the maximum for every document.
+    # JSON serialization is an upper bound for the raw UTF-8 transcription bytes.
+    expected_text = 0
+    expected_pages = 0
+    for row in corpus.db.execute(
+        "SELECT selected_ref FROM corpus_pages WHERE doc_id=? ORDER BY page", (doc_id,)
+    ):
+        if not row[0]:
+            raise ValueError("Document pages are incomplete")
+        reference = json.loads(row[0])
+        expected_text += storage.path(reference["path"]).stat().st_size + 32
+        expected_pages += 1
+    expected_map = max(1, expected_pages * 1024)
+    if max(expected_text, expected_map) > storage.limits.max_scratch_bytes // 2:
+        raise ValueError("Canonical text/page map exceeds scratch admission budget")
+    with (
+        storage.temporary(".txt", max(1, expected_text)) as temporary,
+        storage.temporary(".jsonl", expected_map) as map_file,
+    ):
         with temporary.open("xb") as output, map_file.open("w", encoding="utf-8") as mapping:
             for value, reference in pages(corpus, doc_id, allow_review):
                 count += 1
@@ -68,6 +86,8 @@ def assemble_text(corpus, doc_id, allow_review=False):
                 output.write(chunk)
                 digest.update(chunk)
                 start = offset + len(marker)
+                if mapping.tell() > storage.limits.max_scratch_bytes // 2 - 4096:
+                    raise ValueError("Page map exceeds scratch budget")
                 mapping.write(
                     json.dumps(
                         {

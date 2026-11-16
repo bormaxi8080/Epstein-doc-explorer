@@ -1,4 +1,11 @@
-# DOJ ingestion: preliminary implementation
+# DOJ ingestion and corpus processing
+
+The staged large-corpus workflow is documented in
+[Corpus pipeline](corpus-pipeline.md). Use `scripts/process_corpus.py` with an
+explicit external-root config for durable page OCR, free-only FCC calls,
+canonical text, chunk analysis, review and compatible export. The legacy
+`explorer-ingest` commands below remain available with their original semantics;
+this page labels their preliminary behavior separately.
 
 This fork keeps the original Explorer application and adds an independent Python
 pipeline. PW-010 currently inventories DOJ links and metadata; it does not fetch
@@ -16,7 +23,7 @@ command below remains a backwards-compatible pilot helper. Use `adopt-archive` t
 data root without copying or downloading original payloads. No command
 automatically starts analysis. See [offline hardening](development-hardening.md).
 
-## Implemented stages
+## Legacy pilot helper stages
 
 1. Stream PW-010 v1/v2 `assets` with `ijson`. Check certification flags, issue and
    asset counts, source identity, HTTP(S) URLs and sizes. Preserve the complete
@@ -56,8 +63,9 @@ automatically starts analysis. See [offline hardening](development-hardening.md)
 
 The cloned `data/` corpus is retained unchanged. The current checkout's
 `document_analysis.db` is a 134-byte Git LFS pointer, not the 279,040,000-byte
-SQLite object. Git LFS is not currently installed in this shell. Fetch and verify
-that object before starting the original corpus or passing it as `--base-db`;
+SQLite object. The verified object is now available externally at
+`/Volumes/Transcend/data/EA-explorer/baseline/document_analysis.db`; see the corpus
+verification record. Pass that external path as `--base-db`;
 synthetic tests do not establish real-corpus readiness.
 
 ## Installation and commands
@@ -177,21 +185,24 @@ and stay outside Git. The user's installed FCC/NVIDIA behavior remains a live
 pilot check; no provider-owner mock was reused for this local compatibility
 subset. The stand-in is defined from the caller contract and public FCC docs.
 
-## Planned work before a full archive/public deployment
+## Remaining full-archive acceptance gates
 
 - Full schema coverage and performance validation on the actual certified dump.
 - Cross-snapshot content-version tracking and authoritative identity mapping.
   Conditional/Range resume and response receipts are already implemented by
   the standalone downloader for one immutable source snapshot.
-- OCR and layout quality, DAT/OPT reconstruction, nested archives, media and
-  Office formats; large-file streaming extraction and storage admission control.
-- Tokenizer-aware grouping across pages, document synthesis, semantic tag
-  assignment, assisted alias review, evidence span coordinates and review UI.
+- Representative OCR/layout quality acceptance, DAT/OPT record reconstruction,
+  and verified audio/video/Office conversion routes. Corpus image/text/ZIP handling
+  and storage admission are implemented; unsupported formats remain visible.
+- Model-specific tokenizer calibration and large representative review. Corpus
+  synthesis, cached tag proposals, reviewed aliases and page/evidence catalogue
+  are implemented with conservative byte budgets.
 - Original-page serving and collection/evidence indicators in the frontend.
-- Replace the upstream API's 100,000-row pre-filter cap and in-memory filtering
-  before claiming complete large-corpus search; review its fixed date limits.
-- Validate the real upstream LFS database and run a reviewed 100–300 document
-  pilot through the user's FCC before choosing a production model/host size.
+- Production query latency/load acceptance. API predicates now precede limits
+  and date bounds come from data; bounded graph windows are explicitly incomplete.
+- Complete and manually review the explicitly authorized 250-PDF free FCC pilot,
+  then obtain a representative 5,000-file sample before a full run. The real LFS
+  baseline is already materialized and checked externally.
 
 ## Preliminary verification record (2026-11-02)
 

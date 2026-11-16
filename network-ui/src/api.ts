@@ -1,7 +1,7 @@
 import type { Stats, Relationship, Actor, TagCluster } from './types';
 
 // Use relative path in production (served from same domain), localhost in development
-const API_BASE = import.meta.env.VITE_API_BASE_URL ||
+export const API_BASE = import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
 
 export async function fetchStats(): Promise<Stats> {
