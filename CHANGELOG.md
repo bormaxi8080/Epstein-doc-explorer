@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 5: identity-checked external roots, immutable hashed artifacts,
+  safe scratch/environment scoping and explicit disk/memory/input budgets.
+
 - Corpus stage 4: persistent leased jobs, stale-worker fencing, delayed bounded
   retries, immutable inputs and restart-safe accepted-result caching.
 

@@ -25,7 +25,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 2 | Real upstream baseline and compatibility checks | Implemented; real materialization recorded separately |
 | 3 | Verified pilot/full source selection | Implemented |
 | 4 | Durable leased job queue | Implemented |
-| 5 | External storage and resource limits | Pending |
+| 5 | External storage and resource limits | Implemented |
 | 6 | File/document/page registry | Pending |
 | 7 | Native extraction and isolated rendering | Pending |
 | 8 | Multimodal FCC transport | Pending |
@@ -69,3 +69,13 @@ Successful work is cached across restarts. Retries are delayed and exhausted
 jobs remain failed, never complete. This prevents duplicate accepted artifacts,
 not duplicate upstream charges after an ambiguous network timeout. SQLite is
 the initial single-machine queue; workers do not retain archive leases.
+
+## Storage admission
+
+Initialize an existing empty external directory. The volume, root marker and
+opened queue inode are checked; missing roots are never recreated. Artifacts
+are content-addressed, durable and immutable. Scratch/environment overrides are
+scoped to the selected root. Defaults reserve 5 GiB, bound artifacts to 16 MiB,
+scratch to 512 MiB, source documents to 512 MiB and rendered pages to 20 million
+pixels. Parser workers additionally enforce time/RSS limits. These are admission
+guards, not filesystem quotas. Credentials and rendered images are not logged.
