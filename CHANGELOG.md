@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 1: versioned source/page/OCR/text contracts, stable document IDs,
+  parameter-sensitive stage cache keys and a tracked implementation checklist.
+
 - Lossless, checksummed 75 MB JSON inventory partitions with offline split/read-back
   verification and independent `--manifest` downloader inputs. Preserve origin
   identity, hierarchy/order, every asset/page/occurrence and existing pilot files.
