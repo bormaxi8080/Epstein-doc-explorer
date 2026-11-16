@@ -24,7 +24,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 1 | Contracts and stable identities | Implemented |
 | 2 | Real upstream baseline and compatibility checks | Implemented; real materialization recorded separately |
 | 3 | Verified pilot/full source selection | Implemented |
-| 4 | Durable leased job queue | Pending |
+| 4 | Durable leased job queue | Implemented |
 | 5 | External storage and resource limits | Pending |
 | 6 | File/document/page registry | Pending |
 | 7 | Native extraction and isolated rendering | Pending |
@@ -60,3 +60,12 @@ derived directory. It preserves every source occurrence and copies no originals.
 The frozen selection is independent of later unrelated archive downloads; each
 original is still checked before processing. Network/model calls never retain
 the downloader lease. A changed frozen selection is rejected.
+
+## Job durability
+
+Jobs have immutable inputs, bounded attempts and fenced expiring leases. Each
+claim uses `BEGIN IMMEDIATE`; stale workers cannot publish accepted results.
+Successful work is cached across restarts. Retries are delayed and exhausted
+jobs remain failed, never complete. This prevents duplicate accepted artifacts,
+not duplicate upstream charges after an ambiguous network timeout. SQLite is
+the initial single-machine queue; workers do not retain archive leases.
