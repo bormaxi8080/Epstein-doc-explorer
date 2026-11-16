@@ -155,7 +155,33 @@ class Corpus:
             "SELECT * FROM corpus_sources WHERE doc_id=? ORDER BY id LIMIT 1", (doc_id,)
         ).fetchone()
         if not row:
-            raise ValueError("Document has no frozen archive source")
+            exists = self.db.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='corpus_members'"
+            ).fetchone()
+            member = (
+                self.db.execute(
+                    "SELECT * FROM corpus_members WHERE doc_id=? ORDER BY parent_id,name LIMIT 1",
+                    (doc_id,),
+                ).fetchone()
+                if exists
+                else None
+            )
+            if not member:
+                raise ValueError("Document has no frozen archive source")
+            path = self.storage.path(member["path"])
+            if digest_file(path) != doc["sha256"]:
+                raise ValueError("Container member checksum mismatch")
+            before = path.stat()
+            yield path
+            self.storage.check()
+            after = path.stat()
+            if (before.st_ino, before.st_size, before.st_mtime_ns) != (
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+            ):
+                raise ValueError("Container member changed")
+            return
         check = guard_directory(row["archive_root"])
         with closing(ArchiveView(row["archive_root"])) as archive:
             if archive.marker["uuid"] != row["archive_uuid"]:

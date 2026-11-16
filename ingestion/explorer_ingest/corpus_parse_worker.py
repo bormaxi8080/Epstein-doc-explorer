@@ -20,8 +20,13 @@ def main():
         raise ValueError("Source exceeds parser input budget")
     with path.open("rb") as stream:
         header = stream.read(1024)
+    from .corpus_formats import expand_worker, non_pdf
+
+    if request["action"] == "expand":
+        print(json.dumps(expand_worker(request, path)), flush=True)
+        return
     if b"%PDF-" not in header:
-        print(json.dumps({"format": "unsupported", "pages": 0, "status": "unsupported"}))
+        print(json.dumps(non_pdf(request, path, header)))
         return
     import pypdfium2 as pdfium
 

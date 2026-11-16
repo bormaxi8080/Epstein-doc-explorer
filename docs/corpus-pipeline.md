@@ -34,7 +34,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 11 | Chunk analysis and document assembly | Implemented |
 | 12 | Tags, entities and graph | Implemented |
 | 13 | Compatible export, API and UI | Implemented |
-| 14 | Other formats and scale validation | Pending |
+| 14 | Other formats and scale validation | Implemented for image/text/ZIP; media routes gated |
 | 15 | Bounded full-corpus operation | Pending |
 
 Every implemented stage has regression tests and an Unreleased changelog entry.
@@ -163,3 +163,20 @@ SQLite before LIMIT, removing the silent 100,000-row pre-filter cap and fixed
 1970–2025 exclusion. Result limits count triples, with explicit hasMore metadata;
 the old density-based edge selection is replaced by stable date/ID ordering.
 No claim of complete interactive recall applies to a bounded graph window.
+
+## Additional formats and validation scope
+
+Isolated parsers handle UTF-8 text and raster images (including bounded TIFF
+frames). ZIP expansion checks traversal, symlinks, encryption, duplicate names,
+CRC, entry count, compression ratio, aggregate bytes and nesting depth. Members
+receive content identities and parent/member provenance, then enter inspection.
+Images are transiently converted for the same OCR route. DAT/OPT are retained
+as native UTF-8 text; reconstructing vendor-specific record relationships needs
+a representative source fixture and is not claimed by the generic text parser.
+
+Audio/video/Office formats remain explicitly unsupported until a compatible
+ASR/conversion contract and free FCC route are verified; they cannot count toward
+completed OCR. FCC's current text/image contract is not an audio API. Synthetic
+tests include more than 100,000 graph rows and malformed container budgets.
+Only 250 real PDF originals are locally available; a 5,000-file representative
+acceptance run remains an operational gate, not synthetic evidence of accuracy.

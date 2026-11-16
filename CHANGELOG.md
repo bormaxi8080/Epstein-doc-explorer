@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 14: isolated UTF-8/image processors and bounded ZIP members with
+  stable identities/lineage; explicit unsupported media states and scale gates.
+
 - Corpus stage 13: immutable compatible TXT/SQLite/FTS export, page provenance,
   evidence and document catalogue UI, including zero-edge documents. SQL filters
   precede bounded relationship results; remove hardcoded archive date exclusions.
