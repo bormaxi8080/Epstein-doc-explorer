@@ -3,6 +3,8 @@
 import json
 import os
 
+from jsonschema import ValidationError
+
 from .analysis import SCHEMA, validate_analysis
 from .corpus_contracts import ANALYSIS_PROMPT_VERSION, fingerprint
 from .corpus_fcc import FCCFailure
@@ -104,6 +106,43 @@ def plan_analysis(corpus, doc_id, identity, max_bytes=12000, allow_review=False)
     return position
 
 
+def validated_call(corpus, prompt, validator, client, before_call=None, after_call=None):
+    rejected = None
+    for attempt in range(2):
+        if before_call:
+            before_call(client.identity())
+        result = client.generate(
+            prompt
+            + (
+                "\nCORRECTION: The previous answer failed schema/evidence validation. "
+                "Return exactly the required keys, no extra properties. Every quote must be a verbatim "
+                "substring of DATA on its stated page. Remove unsupported relationships. Stamps, "
+                "filenames and co-occurrence do not establish relationships. Missing dates are null."
+                if attempt
+                else ""
+            )
+        )
+        if after_call:
+            after_call(result)
+        try:
+            validator(result["output"])
+        except (ValidationError, ValueError) as exc:
+            reason = (
+                "schema." + exc.validator
+                if isinstance(exc, ValidationError)
+                else "evidence_dates_or_budget"
+            )
+            rejected = corpus.storage.put(
+                "analysis-rejected",
+                dict(response=result, reason=reason, prompt_version=ANALYSIS_PROMPT_VERSION),
+            )
+            if attempt:
+                raise
+            continue
+        return {**result, "validation_attempts": attempt + 1, "rejected_ref": rejected}
+    raise ValueError("Unreachable validation state")
+
+
 def analyze_fragment(corpus, payload, client, before_call=None, after_call=None):
     if payload["provider"] != client.identity():
         raise ValueError("Analysis provider changed; plan new jobs")
@@ -114,18 +153,21 @@ def analyze_fragment(corpus, payload, client, before_call=None, after_call=None)
         "Never infer guilt, motives, redacted identities or dates. Distinguish allegations, "
         "denials, testimony and statements. Exact page and verbatim quote required. "
         "Unknown people start with unknown or redacted. Missing dates are null. "
+        "Stamps, filenames, photo labels and co-occurrence alone establish no relationships; use rdf_triples=[] without an explicit statement. "
         "Return JSON matching this schema: "
         + json.dumps(SCHEMA)
         + "\nDATA: "
         + json.dumps({k: payload[k] for k in ("page", "start", "text")}, ensure_ascii=False)
     )
     try:
-        if before_call:
-            before_call(client.identity())
-        result = client.generate(prompt)
-        if after_call:
-            after_call(result)
-        validate_analysis(result["output"], payload)
+        result = validated_call(
+            corpus,
+            prompt,
+            lambda value: validate_analysis(value, payload),
+            client,
+            before_call,
+            after_call,
+        )
         if len(result["output"]["rdf_triples"]) == 300:
             raise FCCFailure("Analysis relationship capacity reached")
     except FCCFailure as exc:

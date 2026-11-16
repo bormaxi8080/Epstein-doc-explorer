@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Evidence prompt v2: retain rejected real-provider outputs and permit one
+  budgeted schema/evidence correction without weakening quote/date validation.
+
 - Integration hardening: versioned analysis plans across model/chunk changes,
   synthesis input lineage, aggregate scratch reservations, disk ZIP manifests,
   alias/API consistency, data-derived UI date ranges, same-origin local CORS,

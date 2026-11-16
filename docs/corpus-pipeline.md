@@ -274,3 +274,12 @@ redacted identities can never be merged by these commands.
 +are stored only for unique quote matches; repeated quotes retain a match count
 +and null offsets instead of fabricated coordinates.
 +
+## Real-provider validation feedback
+
+The authorized draft check exposed a timeout, an additional response property,
+and an evidence quote absent from the supplied fragment. Those results were
+rejected, never published as accepted analysis. Evidence prompt v2 explicitly
+excludes relationships inferred from stamps/filenames/photo labels and permits
+one budgeted corrective call for schema/evidence failure. Both answers are kept;
+the correction must pass the same strict validator. A second failure remains
+failed. Network timeouts still pause instead of triggering a corrective call.

@@ -129,3 +129,39 @@ class AnalysisTests(unittest.TestCase):
             self.assertEqual(c.storage.get(ref)["review_required"], 1)
             with self.assertRaisesRegex(ValueError, "reviewed"):
                 approve(c, doc)
+
+    def test_schema_repair_is_bounded_and_retains_rejected_output(self):
+        class RepairClient(Client):
+            calls = 0
+
+            def generate(self, prompt):
+                result = Client.generate(self, prompt)
+                if self.calls == 1:
+                    result["output"]["unexpected_field"] = "synthetic"
+                return result
+
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            doc = document_id("3" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes,text_ref) VALUES (?,?,1,?)",
+                (doc, "3" * 64, json.dumps({"sha256": "text"})),
+            )
+            client = RepairClient()
+            payload = dict(
+                doc_id=doc,
+                text_key="text",
+                page=1,
+                start=0,
+                text="Synthetic source text",
+                provider=client.identity(),
+            )
+            ref = analyze_fragment(c, payload, client)["reference"]
+            result = c.storage.get(ref)
+            self.assertEqual(client.calls, 2)
+            self.assertEqual(result["validation_attempts"], 2)
+            self.assertIsNotNone(result["rejected_ref"])
+            self.assertEqual(
+                c.storage.get(result["rejected_ref"])["reason"], "schema.additionalProperties"
+            )
