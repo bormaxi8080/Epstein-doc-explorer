@@ -6,10 +6,15 @@ from urllib.parse import urlparse
 
 import ijson
 
+from .inventory_parts import Inventory, checked_copy, guard_directory
 from .state import digest_file, fingerprint
 
 
 def import_inventory(store, source, allow_partial=False):
+    if isinstance(source, Inventory):
+        if source.is_bundle:
+            return import_partitioned_inventory(store, source, allow_partial)
+        source = source.path
     source = Path(source)
     snapshot = digest_file(source)
     destination = store.root / "inventories" / (snapshot + ".json")
@@ -75,3 +80,58 @@ def import_inventory(store, source, allow_partial=False):
         if validation.get("unique_files_count") != count:
             raise ValueError("Inventory asset count does not match validation")
     return {"inventory_id": snapshot, "assets": count, "complete": complete}
+
+
+def import_partitioned_inventory(store, source, allow_partial=False):
+    """Preserve the complete bundle for a downstream audited archive handoff."""
+    source.scan()
+    metadata, validation = source.header["metadata"], source.header["validation"]
+    complete = all(
+        validation.get(key) is True
+        for key in (
+            "schema_valid",
+            "structure_complete",
+            "metadata_complete",
+            "source_stable",
+            "complete",
+        )
+    )
+    if not complete and not allow_partial:
+        raise ValueError("Inventory is partial; --allow-partial is required for a pilot")
+    check = guard_directory(store.root)
+    directory = store.root
+    for name in ("inventories", source.sha256 + ".parts", source.manifest_sha256):
+        check()
+        directory = directory / name
+        if directory.is_symlink():
+            raise ValueError("Inventory symlinks are forbidden")
+        directory.mkdir(exist_ok=True)
+    for part in source.manifest["parts"]:
+        checked_copy(source.member(part), directory / part["path"], part["sha256"], check)
+    manifest = directory / "manifest.json"
+    if manifest.is_symlink():
+        raise ValueError("Inventory symlinks are forbidden")
+    checked_copy(source.path, manifest, source.manifest_sha256, check)
+    saved = Inventory(manifest, manifest=True)
+    if saved.manifest != source.manifest:
+        raise ValueError("Stored inventory manifest mismatch")
+    count = 0
+    with store.db:
+        store.db.execute(
+            "INSERT OR IGNORE INTO inventories VALUES (?,?,?,?)",
+            (source.sha256, source.header["schema_version"], int(complete), json.dumps(metadata)),
+        )
+        for record in saved.records("asset"):
+            asset_id, asset = record["id"], record["data"]
+            if urlparse(asset.get("url", "")).scheme not in ("http", "https"):
+                raise ValueError("Asset URLs must use HTTP(S)")
+            key = fingerprint([source.sha256, asset_id])
+            store.db.execute(
+                """INSERT OR IGNORE INTO assets
+                (id,inventory_id,original_id,metadata) VALUES (?,?,?,?)""",
+                (key, source.sha256, asset_id, json.dumps(asset)),
+            )
+            count += 1
+        if count != validation["unique_files_count"] or not count:
+            raise ValueError("Inventory asset count does not match validation")
+    return {"inventory_id": source.sha256, "assets": count, "complete": complete}

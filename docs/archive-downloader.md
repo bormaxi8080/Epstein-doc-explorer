@@ -9,6 +9,8 @@ Only an explicit `fetch` does. No real archive was fetched during development.
 
 - `--dump`: the original, uncompressed PW-010 JSON file, placed wherever the
   operator chooses. This is an inventory, not an archive payload or latest pointer.
+- `--manifest`: alternative to `--dump` for `plan`/`rebuild`; selects one complete,
+  checksummed partitioned inventory. Keep it with every listed part.
 - `--evidence-db`: optional closed PW-010 SQLite backup in another location.
   A backup is opened read-only with immutable/query-only SQLite settings;
   WAL/SHM/journal sidecars are rejected. Do not pass the currently running crawler's
@@ -77,7 +79,8 @@ Keep waiting for the final dump for the actual full acquisition.
 ```
 
 `--limit` on `verify` is a bounded diagnostic and cannot certify the whole corpus.
-A destination belongs to one JSON SHA-256. Repeating `plan` with identical JSON is
+A destination belongs to one original JSON SHA-256. Partitioned representations
+retain this identity and have separate manifest/member hashes. Repeating `plan` with identical JSON is
 idempotent; a different dump requires another destination. No implicit refresh
 replaces existing originals. After package reinstallation, `explorer-download`
 is an equivalent console entry point; the separate script works directly.
@@ -148,8 +151,8 @@ behavior during forced device removal still governs physical durability.
 The config defaults bound individual files to 64 GiB, ZIP validation to 20 GiB
 expanded data/one million members, reserve 1 GiB free, and use two retries. Review
 the actual catalog sizes before increasing limits. A valid but larger ZIP needs
-an explicit higher validation budget. Planning reserves an estimate of three
-times JSON size plus the free-space floor; real ledger growth remains dependent
+an explicit higher validation budget. Planning reserves an estimate of five
+times original JSON size plus the free-space floor; real ledger growth remains dependent
 on the dump. All effective fetch settings are retained in the ledger.
 
 ## Integrity, completeness and correctness
@@ -164,8 +167,9 @@ These are distinct claims:
 | Structural correctness | Strict PDF structure/end marker; streaming ZIP CRC and member safety/budgets; UTF-8 text decoding |
 | Limited format checks | Media signatures, encrypted PDF headers, opaque files and DAT/OPT preservation are explicitly marked as not fully checked |
 
-`verify` also checks SQLite integrity, the saved JSON checksum and every logical
-reference. A successful full audit publishes `verified-files.jsonl` with its own
+`verify` also checks SQLite integrity, the saved JSON checksum (or all manifest
+members and the semantic signature) and every logical reference. A source-check
+failure invalidates the prior successful audit. A successful full audit publishes `verified-files.jsonl` with its own
 SHA-256 in `last_full_audit`. Any new fetch/quarantine or failed/bounded verification
 invalidates that manifest. Reports distinguish `download_complete`, producer
 certification and `complete_at_last_audit`; the last is historical evidence at its
@@ -367,3 +371,126 @@ Operator results are `verify-result.json`, `.pw010-download/report.json`,
 `.pw010-download/pilot.json`, `.pw010-download/pilot-verified-files.jsonl` and
 `.pw010-download/events.jsonl` under the selected root. The input path is an
 independent `--dump` argument and output is an independent `--destination`.
+
+
+## Partitioned inventory input
+
+`split` is an explicit offline operation. It keeps the original dump unchanged,
+creates a new immutable directory beside it, and never starts acquisition:
+
+```bash
+.venv/bin/python scripts/download_archive.py \
+  --destination /Volumes/Transcend/data/EA-download \
+  split --dump /Volumes/Transcend/data/EA/doj_disclosures.json \
+  --output /Volumes/Transcend/data/EA/inventory-parts/292e4f9c7dfd447097cf8522e405dae8 \
+  --target-mb 75
+```
+
+The output parent must already exist on the mounted external disk; the output
+directory itself must not exist. `--target-mb` uses decimal, uncompressed MB and
+accepts 1–100 (default 75). Records are never cut. A record larger than the target
+gets its own part, up to the hard 100 MB limit; larger records fail explicitly.
+The final part may be smaller. Manifest and parts are UTF-8 JSON. Each part has
+one record per line within a `records` array and is independently valid JSON.
+It is an inventory fragment, not a complete PW-010 dump or a downloadable corpus.
+
+The version-1 `pw010-inventory-parts` manifest contains the original SHA-256 and
+byte size, the complete producer metadata/validation, target size, ordered part
+names, exact byte sizes, SHA-256 hashes and per-type record counts. A semantic
+signature covers the complete header and ordered records of each type. Empty
+issues are represented by a zero issue-record count; nonempty issue objects are
+preserved as records, although splitting requires a certified complete source.
+
+Records preserve these fields:
+
+- `tree` / legacy `storage_tree`: preorder `seq`, parent sequence and the full
+  original `data`, with `children` retained as an empty-array marker. Records are
+  emitted in postorder. Reattach child records to their parents in ascending
+  `seq` to reconstruct every directory, sibling order and original node field.
+- `asset`: original asset-registry `id` and the complete original `data`, including
+  every occurrence, URL, size and extra field.
+- `page` / `issue`: complete original `data`.
+
+Only child arrays are flattened. Shared assets remain one asset with multiple
+placements. No absolute source directory, binary payload or credential is copied
+into records. The schema remains separately identified as PW-010 v1/v2; partition
+format version 1 does not change that producer contract.
+
+The writer streams one node/asset/page at a time, checks the producer counters
+and record schemas, hashes the original before and after reading, then reads
+back every part to compare the complete semantic signature. All staging is in
+the output's parent directory on the selected disk. Publication happens only
+after verification; root/volume checks prevent recreating a missing disk path.
+Progress is JSONL on stderr. An interrupted split has no published output and
+can be repeated after its temporary-directory cleanup.
+
+Connect the complete set using the same existing download destination:
+
+```bash
+.venv/bin/python scripts/download_archive.py \
+  --destination /Volumes/Transcend/data/EA-download \
+  plan --manifest /Volumes/Transcend/data/EA/inventory-parts/292e4f9c7dfd447097cf8522e405dae8/manifest.json
+```
+
+A new destination validates/pins all parts and runs the same schema, hierarchy,
+page evidence, occurrence, count and path checks as `--dump`. Input files are
+copied to `.pw010-download/inputs/bundles/<manifest SHA-256>/`; completed matching
+parts are reused after interruption and the local manifest is copied last.
+SQLite imports checkpoint every 5,000 records and at phase boundaries. An
+unfinished plan cannot fetch or audit. Restart with the same manifest and layout
+to resume committed records. Input integrity is checked again on restart; already
+committed records in complete parts can be skipped during SQL import. Only the
+final validated transaction makes the plan ready.
+
+For an existing completed plan, attaching requires independently checksumming
+and semantically comparing its saved original inventory with the complete input
+set. Claiming the same origin SHA in a manifest is insufficient. Equivalent
+attachment keeps the ledger's `source_sha256`, original paths, all download
+statuses, receipts, attempt counts and frozen pilot order. It retains the saved
+large JSON and invalidates old audits so a fresh `verify` is required. Reattaching
+an already attached, unchanged valid set is idempotent and retains its audit.
+
+`fetch` continues from the ledger without reading parts for each document.
+`verify` checks every inventory part even for a pilot, then audits the requested
+payload scope. `backup`, `restore`, `rebuild --manifest` and audited downstream
+adoption preserve the whole set and support bundle-only archives. Metadata
+backups containing bundles use format version 2; legacy single-JSON backups stay
+at version 1. The source dump and payload directories are never moved or deleted.
+
+Splitting does not reduce SQLite size or speed up HTTP requests. The normalized
+set adds some record overhead. Retaining both the exported set and the pinned
+copy adds roughly two set sizes on the external disk; old JSON copies remain.
+Reserve checks protect free space but are not a filesystem quota.
+
+
+### Verified local conversion, 2026-11-16
+
+The completed snapshot `292e4f9c7dfd447097cf8522e405dae8` was converted without
+modifying or moving `/Volumes/Transcend/data/EA/doj_disclosures.json` or its pinned
+copy. Original SHA-256 remains
+`7e4791264d49dd256c1eaaf381e5da0764d2bc4d39f7fea56614abce740a47b8`.
+
+- Exported manifest:
+  `/Volumes/Transcend/data/EA/inventory-parts/292e4f9c7dfd447097cf8522e405dae8/manifest.json`.
+- Manifest SHA-256:
+  `17b3ccb36f18387675556374201165ed9c70deec1515ecc9ca930ce5316ebfef`.
+- 24 parts total 1,769,830,164 bytes. The first 23 are approximately 75 MB each;
+  the final part is 44,838,516 bytes. The largest is 74,999,990 bytes.
+- Records: 1,396,813 tree nodes, 1,396,719 unique assets and 27,980 pages.
+  All 1,396,720 occurrences and 408,135,188,823 expected payload bytes are retained.
+- The existing `/Volumes/Transcend/data/EA-download` ledger now uses its own
+  byte-identical pinned set at
+  `.pw010-download/inputs/bundles/17b3ccb36f18387675556374201165ed9c70deec1515ecc9ca930ce5316ebfef/`.
+  Payload and catalog paths, receipt identities, attempts and frozen selection
+  were compared with a pre-attachment baseline and retained.
+- A fresh `verify --pilot` verified every inventory part and all 250 existing
+  PDFs, with zero failures and all content fully checked. It took 125.052 seconds
+  and observed 131,088,384 bytes peak child RSS on this Mac. The pilot JSONL hash
+  remains `687aeeebbe50700ead14662a2e4cdb7486e535698eb65757e92a822ea0714262`.
+  The current report remains `/Volumes/Transcend/data/EA-download/verify-result.json`.
+- Split/attachment/audit logs and split/audit measurements are under
+  `/Volumes/Transcend/data/EA/inventory-parts/`. No new archive payloads were fetched.
+
+This confirms the input conversion and the existing pilot. The full archive
+payload download is still incomplete; inventory completeness and pilot audit
+success do not certify all 1,396,719 originals as downloaded.

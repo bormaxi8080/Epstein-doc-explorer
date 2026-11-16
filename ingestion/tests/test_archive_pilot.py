@@ -287,7 +287,7 @@ class PilotTests(fixtures.HTTPFixture):
 import sys
 from pathlib import Path
 import explorer_ingest.archive_cli as cli
-def slow(archive,*args):
+def slow(archive,*args,**kwargs):
  Path(sys.argv[3]).write_text('ready')
  archive.db.execute('WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000000000) SELECT sum(x) FROM n').fetchone()
 cli.plan=slow

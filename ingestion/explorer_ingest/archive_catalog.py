@@ -5,11 +5,10 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import sqlite3
 import sys
 import uuid
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -19,6 +18,7 @@ import ijson
 from jsonschema import Draft202012Validator
 
 from .archive_contracts import read_artifact, validate_artifact
+from .inventory_parts import Inventory, attach_bundle, pin_bundle
 from .state import atomic_json as state_atomic_json
 from .state import digest_file
 
@@ -263,87 +263,89 @@ def evidence_receipt(path, metadata):
     }
 
 
-def stream_nodes(archive, source, validator, root="tree"):
-    stack, sequence, keys = [], 0, set()
-    with source.open("rb") as stream:
-        for prefix, event, value in ijson.parse(stream, use_float=True):
-            if prefix == "" and event == "map_key":
-                if value in keys:
-                    raise ValueError("Duplicate root JSON key")
-                keys.add(value)
-            if prefix != root and not prefix.startswith(root + "."):
-                continue
-            if event == "start_map" and (prefix == root or prefix.endswith(".children.item")):
-                sequence += 1
-                if len(stack) >= 64:
-                    raise ValueError("Source hierarchy exceeds supported depth")
-                stack.append(
-                    {
-                        "seq": sequence,
-                        "parent": stack[-1]["seq"] if stack else None,
-                        "prefix": prefix,
-                        "data": {},
-                    }
-                )
-            elif stack and event in ("string", "number", "boolean", "null"):
-                frame = stack[-1]
-                key = prefix[len(frame["prefix"]) + 1 :]
-                if "." not in key:
-                    frame["data"][key] = value
-            elif stack and event == "start_array" and prefix == stack[-1]["prefix"] + ".children":
-                stack[-1]["data"]["children"] = []
-            elif stack and event == "end_map" and prefix == stack[-1]["prefix"]:
-                frame = stack.pop()
-                node = frame["data"]
-                validator.validate(node)
-                if root == "tree":
-                    archive.db.execute(
-                        "INSERT INTO nodes VALUES (?,?,?,?,?,?,?)",
-                        (
-                            frame["seq"],
-                            frame["parent"],
-                            node["id"],
-                            node["name"],
-                            node["kind"],
-                            node.get("asset_id"),
-                            node.get("page_id"),
-                        ),
-                    )
-                elif node["kind"] == "file":
-                    archive.db.execute("INSERT INTO storage_assets VALUES (?)", (node["asset_id"],))
-                if sequence % 5000 == 0:
-                    archive.check()
-                    log_event(archive, "plan_tree", nodes=sequence)
+@contextmanager
+def planning_transaction(archive, resumable):
+    # An unfinished bundle import is inaccessible to fetch/verify. Deferred
+    # parent links may span committed parts; check all FKs before publishing.
+    if resumable:
+        archive.db.execute("PRAGMA foreign_keys=OFF")
+    try:
+        with archive.db:
+            yield
+    finally:
+        if resumable:
+            archive.db.execute("PRAGMA foreign_keys=ON")
+
+
+def stream_nodes(archive, source, validator, root="tree", progress=None, checkpoint=None):
+    skipped = (progress or {}).get(root, 0)
+    for index, record in enumerate(source.records(root, skip=skipped), skipped + 1):
+        node = record["data"]
+        validator.validate(node)
+        if root == "tree":
+            archive.db.execute(
+                "INSERT INTO nodes VALUES (?,?,?,?,?,?,?)",
+                (
+                    record["seq"],
+                    record["parent"],
+                    node["id"],
+                    node["name"],
+                    node["kind"],
+                    node.get("asset_id"),
+                    node.get("page_id"),
+                ),
+            )
+        elif node["kind"] == "file":
+            archive.db.execute("INSERT INTO storage_assets VALUES (?)", (node["asset_id"],))
+        if index % 5000 == 0:
+            archive.check()
+            log_event(archive, "plan_tree", nodes=index, tree=root)
+            if checkpoint:
+                checkpoint(root, index)
+    if checkpoint:
+        checkpoint(root, locals().get("index", skipped))
+    keys = {"schema_version", "metadata", "tree", "assets", "pages", "validation", "issues"}
+    if source.header["schema_version"] == 1:
+        keys.add("storage_tree")
     return keys
 
 
-def plan(archive, source, evidence_db=None, allow_partial=False, layout=None):
+def plan(
+    archive,
+    source,
+    evidence_db=None,
+    allow_partial=False,
+    layout=None,
+    manifest=False,
+    reserve_bytes=1024**3,
+):
     archive.check()
     layout = layout or archive.meta("layout", "url")
     if layout not in ("url", "logical"):
         raise ValueError("Layout must be url or logical")
     if archive.meta("plan_complete") and archive.meta("layout", "url") != layout:
         raise ValueError("An existing plan retains its original layout")
-    source = Path(source).resolve(strict=True)
-    log_event(archive, "plan_start", layout=layout, source_bytes=source.stat().st_size)
-    sha = digest_file(source)
+    source = Inventory(source, manifest=manifest)
+    log_event(archive, "plan_start", layout=layout, source_bytes=source.source_bytes)
+    sha = source.sha256
     if archive.meta("source_sha256") and archive.meta("source_sha256") != sha:
         raise ValueError("A destination belongs to one immutable dump; select a new directory")
-    inputs = archive.path(f"{CONTROL}/inputs")
-    inputs.mkdir(exist_ok=True)
-    saved = inputs / (sha + ".json")
-    if not saved.exists():
-        temporary = saved.with_suffix(".tmp")
-        shutil.copyfile(source, temporary)
-        with temporary.open("rb") as copied:
-            os.fsync(copied.fileno())
-        if digest_file(temporary) != sha:
-            raise ValueError("Source JSON changed during snapshot copy")
-        temporary.replace(saved)
-        sync_directory(saved.parent)
-    elif digest_file(saved) != sha:
-        raise ValueError("Stored JSON checksum mismatch")
-    version = read_item(saved, "schema_version")
+    if manifest:
+        saved = (
+            source if archive.meta("plan_complete") else pin_bundle(archive, source, reserve_bytes)
+        )
+    else:
+        inputs = archive.path(f"{CONTROL}/inputs")
+        inputs.mkdir(exist_ok=True)
+        saved_path = inputs / (sha + ".json")
+        if not saved_path.exists():
+            from .inventory_parts import checked_copy
+
+            checked_copy(source.path, saved_path, sha, archive.check, reserve_bytes)
+        elif digest_file(saved_path) != sha:
+            raise ValueError("Stored JSON checksum mismatch")
+        saved = source if saved_path == source.path else Inventory(saved_path)
+    version = saved.header["schema_version"]
     if type(version) is not int or version not in (1, 2):
         raise ValueError("Only PW-010 JSON schema v1/v2 is supported")
     schema = json.loads(Path(__file__).with_name(f"pw010-v{version}.schema.json").read_text())
@@ -352,7 +354,7 @@ def plan(archive, source, evidence_db=None, allow_partial=False, layout=None):
     def validator(name):
         return Draft202012Validator({"$defs": schema["$defs"], "$ref": f"#/$defs/{name}"})
 
-    metadata, checks = read_item(saved, "metadata"), read_item(saved, "validation")
+    metadata, checks = saved.header["metadata"], saved.header["validation"]
     for key, value in (("metadata", metadata), ("validation", checks)):
         Draft202012Validator(schema["properties"][key]).validate(value)
     certified = all(checks[key] is True for key in FLAGS)
@@ -365,24 +367,74 @@ def plan(archive, source, evidence_db=None, allow_partial=False, layout=None):
             evidence[key] != previous_evidence.get(key) for key in ("sha256", "snapshot_id")
         ):
             raise ValueError("Plan already bound; use the same evidence input")
+        if manifest:
+            return attach_bundle(archive, saved, reserve_bytes)
         return report(archive)
-    with archive.db:
-        archive.db.execute("DELETE FROM pilot_assets")
-        archive.db.execute("DELETE FROM occurrences")
-        archive.db.execute("DELETE FROM placements")
-        archive.db.execute("DELETE FROM assets")
-        archive.db.execute("DELETE FROM nodes")
-        archive.db.execute("DELETE FROM pages")
-        archive.db.execute("DELETE FROM storage_assets")
-        archive.db.execute("DROP INDEX IF EXISTS idx_nodes_asset")
+    resumable = saved.is_bundle
+    import_key = saved.manifest_sha256 if resumable else None
+    progress = (
+        archive.meta("planning_progress", {})
+        if (resumable and archive.meta("planning_source") == import_key)
+        else {}
+    )
+    progress = progress or {}
+    if progress and archive.meta("planning_layout") != layout:
+        raise ValueError("An interrupted plan retains its original layout")
+
+    def checkpoint(phase, count, metrics=None):
+        if resumable:
+            progress[phase] = count
+            if metrics is not None:
+                progress[phase + "_metrics"] = metrics
+            archive.set_meta("planning_progress", progress)
+            archive.db.commit()
+            log_event(archive, "plan_checkpoint", phase=phase, records=count)
+
+    with planning_transaction(archive, resumable):
+        if not progress:
+            archive.db.execute("DELETE FROM pilot_assets")
+            archive.db.execute("DELETE FROM occurrences")
+            archive.db.execute("DELETE FROM placements")
+            archive.db.execute("DELETE FROM assets")
+            archive.db.execute("DELETE FROM nodes")
+            archive.db.execute("DELETE FROM pages")
+            archive.db.execute("DELETE FROM storage_assets")
+            archive.db.execute("DROP INDEX IF EXISTS idx_nodes_asset")
+            archive.set_meta("planning_layout", layout)
+            archive.set_meta("planning_source", import_key)
+            archive.set_meta("planning_progress", {})
+            if resumable:
+                archive.db.commit()
         log_event(archive, "plan_tree_start")
-        keys = stream_nodes(archive, saved, validator("node"))
+        keys = stream_nodes(
+            archive, saved, validator("node"), progress=progress, checkpoint=checkpoint
+        )
         log_event(archive, "plan_tree_index")
-        archive.db.execute("CREATE INDEX idx_nodes_asset ON nodes(asset_id,seq)")
+        archive.db.execute("CREATE INDEX IF NOT EXISTS idx_nodes_asset ON nodes(asset_id,seq)")
         if set(schema["required"]) - keys or keys - set(schema["properties"]):
             raise ValueError("Missing or unsupported top-level inventory fields")
         if version == 1:
-            stream_nodes(archive, saved, validator("node"), root="storage_tree")
+            stream_nodes(
+                archive,
+                saved,
+                validator("node"),
+                root="storage_tree",
+                progress=progress,
+                checkpoint=checkpoint,
+            )
+
+        node_counts = archive.db.execute("SELECT COUNT(*),MIN(seq),MAX(seq) FROM nodes").fetchone()
+        if not node_counts[0] or node_counts[1] != 1 or node_counts[2] != node_counts[0]:
+            raise ValueError("Inventory node sequences are not contiguous")
+        if archive.db.execute("""SELECT 1 FROM nodes n LEFT JOIN nodes p ON n.parent=p.seq
+            WHERE (n.seq=1 AND n.parent IS NOT NULL) OR
+                  (n.seq!=1 AND (p.seq IS NULL OR n.parent>=n.seq)) LIMIT 1""").fetchone():
+            raise ValueError("Inventory hierarchy has invalid parents")
+        if archive.db.execute("""WITH RECURSIVE depth(seq,n) AS (
+            SELECT seq,1 FROM nodes WHERE parent IS NULL UNION ALL
+            SELECT c.seq,d.n+1 FROM nodes c JOIN depth d ON c.parent=d.seq WHERE d.n<65
+            ) SELECT 1 FROM depth WHERE n>64 LIMIT 1""").fetchone():
+            raise ValueError("Source hierarchy exceeds supported depth")
 
         @lru_cache(maxsize=8192)
         def original_directory(sequence):
@@ -423,76 +475,84 @@ def plan(archive, source, evidence_db=None, allow_partial=False, layout=None):
                 )
             return path
 
-        count = known = unknown = placements = pages = issues = checksum_count = 0
+        count, known, unknown, placements, checksum_count = progress.get(
+            "asset_metrics", [0, 0, 0, 0, 0]
+        )
+        pages, issues = progress.get("page", 0), progress.get("issue", 0)
         log_event(archive, "plan_pages_start")
-        with saved.open("rb") as stream:
-            for page in ijson.items(stream, "pages.item", use_float=True):
-                validator("page").validate(page)
-                if certified and (
-                    page["state"] != "done"
-                    or not page["verified_hash"]
-                    or page["verified_hash"] != page["structure_hash"]
-                ):
-                    raise ValueError("Certified inventory contains an unverified page")
-                archive.db.execute("INSERT INTO pages VALUES (?,?)", (page["page_id"], page["url"]))
-                pages += 1
-                if pages % 5000 == 0:
-                    log_event(archive, "plan_pages", pages=pages)
+        for record in saved.records("page", skip=progress.get("page", 0)):
+            page = record["data"]
+            validator("page").validate(page)
+            if certified and (
+                page["state"] != "done"
+                or not page["verified_hash"]
+                or page["verified_hash"] != page["structure_hash"]
+            ):
+                raise ValueError("Certified inventory contains an unverified page")
+            archive.db.execute("INSERT INTO pages VALUES (?,?)", (page["page_id"], page["url"]))
+            pages += 1
+            if pages % 5000 == 0:
+                log_event(archive, "plan_pages", pages=pages)
+                checkpoint("page", pages)
+        checkpoint("page", pages)
         log_event(archive, "plan_assets_start")
-        with saved.open("rb") as stream:
-            for asset_id, asset in ijson.kvitems(stream, "assets", use_float=True):
-                validator("asset").validate(asset)
-                if asset.get("asset_id", asset_id) != asset_id:
-                    raise ValueError("Asset key and embedded identity disagree")
-                parsed = urlsplit(asset["url"])
-                if (
-                    parsed.scheme not in ("http", "https")
-                    or not parsed.hostname
-                    or parsed.username
-                    or parsed.password
-                ):
-                    raise ValueError("Source URL must be HTTP(S) without embedded credentials")
-                if certified and (asset["size_bytes"] is None or asset["status"] != "verified"):
-                    raise ValueError("Certified asset is missing verified metadata")
-                expected_hash = asset.get("sha256")
-                if expected_hash is not None and (
-                    not isinstance(expected_hash, str)
-                    or len(expected_hash) != 64
-                    or any(c not in "0123456789abcdef" for c in expected_hash)
-                ):
-                    raise ValueError("Invalid optional source SHA-256")
-                checksum_count += expected_hash is not None
+        for record in saved.records("asset", skip=progress.get("asset", 0)):
+            asset_id, asset = record["id"], record["data"]
+            validator("asset").validate(asset)
+            if asset.get("asset_id", asset_id) != asset_id:
+                raise ValueError("Asset key and embedded identity disagree")
+            parsed = urlsplit(asset["url"])
+            if (
+                parsed.scheme not in ("http", "https")
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+            ):
+                raise ValueError("Source URL must be HTTP(S) without embedded credentials")
+            if certified and (asset["size_bytes"] is None or asset["status"] != "verified"):
+                raise ValueError("Certified asset is missing verified metadata")
+            expected_hash = asset.get("sha256")
+            if expected_hash is not None and (
+                not isinstance(expected_hash, str)
+                or len(expected_hash) != 64
+                or any(c not in "0123456789abcdef" for c in expected_hash)
+            ):
+                raise ValueError("Invalid optional source SHA-256")
+            checksum_count += expected_hash is not None
+            archive.db.execute(
+                "INSERT INTO assets(id,canonical_url,metadata,expected_bytes,relative_path) VALUES (?,?,?,?,?)",
+                (
+                    asset_id,
+                    asset["url"],
+                    json.dumps(asset),
+                    asset["size_bytes"],
+                    asset_path(asset_id, asset),
+                ),
+            )
+            for occurrence in asset["occurrences"]:
                 archive.db.execute(
-                    "INSERT INTO assets(id,canonical_url,metadata,expected_bytes,relative_path) VALUES (?,?,?,?,?)",
+                    "INSERT INTO occurrences VALUES (?,?,?,?)",
                     (
                         asset_id,
-                        asset["url"],
-                        json.dumps(asset),
-                        asset["size_bytes"],
-                        asset_path(asset_id, asset),
+                        occurrence["node_id"],
+                        occurrence.get("page_id"),
+                        occurrence.get("page_url"),
                     ),
                 )
-                for occurrence in asset["occurrences"]:
-                    archive.db.execute(
-                        "INSERT INTO occurrences VALUES (?,?,?,?)",
-                        (
-                            asset_id,
-                            occurrence["node_id"],
-                            occurrence.get("page_id"),
-                            occurrence.get("page_url"),
-                        ),
-                    )
-                    placements += 1
-                count += 1
-                unknown += asset["size_bytes"] is None
-                known += asset["size_bytes"] or 0
-                if count % 5000 == 0:
-                    archive.check()
-                    log_event(archive, "plan_assets", assets=count)
-        with saved.open("rb") as stream:
-            for issue in ijson.items(stream, "issues.item"):
-                Draft202012Validator(schema["properties"]["issues"]["items"]).validate(issue)
-                issues += 1
+                placements += 1
+            count += 1
+            unknown += asset["size_bytes"] is None
+            known += asset["size_bytes"] or 0
+            if count % 5000 == 0:
+                archive.check()
+                log_event(archive, "plan_assets", assets=count)
+                checkpoint("asset", count, [count, known, unknown, placements, checksum_count])
+        checkpoint("asset", count, [count, known, unknown, placements, checksum_count])
+        for record in saved.records("issue", skip=progress.get("issue", 0)):
+            issue = record["data"]
+            Draft202012Validator(schema["properties"]["issues"]["items"]).validate(issue)
+            issues += 1
+        checkpoint("issue", issues)
         if certified and (not count or issues):
             raise ValueError("Certified inventory is empty or reports issues")
         measured = {
@@ -542,10 +602,14 @@ def plan(archive, source, evidence_db=None, allow_partial=False, layout=None):
             )
 
         log_event(archive, "plan_placements_start")
+        placement_skip = progress.get("placements", 0)
         for index, node in enumerate(
             archive.db.execute(
-                "SELECT seq,parent,node_id,name,asset_id FROM nodes WHERE kind='file'"
-            )
+                "SELECT seq,parent,node_id,name,asset_id FROM nodes WHERE kind='file' "
+                "ORDER BY seq LIMIT -1 OFFSET ?",
+                (placement_skip,),
+            ),
+            placement_skip + 1,
         ):
             relative = str(
                 Path(
@@ -559,6 +623,19 @@ def plan(archive, source, evidence_db=None, allow_partial=False, layout=None):
             )
             if index % 5000 == 0:
                 archive.check()
+                checkpoint("placements", index)
+        if archive.db.execute("PRAGMA foreign_key_check").fetchone():
+            raise ValueError("Inventory has invalid foreign-key references")
+        if saved.is_bundle:
+            archive.set_meta(
+                "source_bundle",
+                {
+                    "path": str(saved.path.relative_to(archive.root)),
+                    "manifest_sha256": saved.manifest_sha256,
+                },
+            )
+        archive.set_meta("planning_progress", None)
+        archive.set_meta("planning_source", None)
         archive.set_meta("layout", layout)
         archive.set_meta("source_sha256", sha)
         archive.set_meta("source_metadata", metadata)

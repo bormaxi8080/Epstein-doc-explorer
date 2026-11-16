@@ -18,6 +18,7 @@ from .archive_maintenance import backup, rebuild, restore
 from .archive_observer import ArchiveView, doctor, snapshot, watch
 from .archive_selection import create_pilot
 from .archive_transfer import Options, fetch, quarantine, storage_check, verify
+from .inventory_parts import Inventory, split_inventory
 
 
 def main(argv=None):
@@ -35,12 +36,20 @@ def main(argv=None):
     planning = commands.add_parser(
         "plan", help="Offline: validate and copy an immutable JSON inventory"
     )
-    planning.add_argument("--dump", required=True, type=Path)
+    planning_input = planning.add_mutually_exclusive_group(required=True)
+    planning_input.add_argument("--dump", type=Path)
+    planning_input.add_argument("--manifest", type=Path)
     planning.add_argument(
         "--evidence-db", type=Path, help="Optional closed PW-010 SQLite backup, opened read-only"
     )
     planning.add_argument("--allow-partial", action="store_true")
     planning.add_argument("--layout", choices=("url", "logical"), default=None)
+    splitting = commands.add_parser("split", help="Offline: create verified JSON inventory parts")
+    splitting.add_argument("--dump", required=True, type=Path)
+    splitting.add_argument("--output", required=True, type=Path)
+    splitting.add_argument(
+        "--target-mb", type=int, default=75, help="Target uncompressed decimal MB per part (1-100)"
+    )
     selection = commands.add_parser(
         "pilot", help="Offline: freeze the first unique files in tree order"
     )
@@ -83,7 +92,9 @@ def main(argv=None):
     rebuilding = commands.add_parser(
         "rebuild", help="Rebuild a missing ledger from JSON and receipts"
     )
-    rebuilding.add_argument("--dump", required=True, type=Path)
+    rebuilding_input = rebuilding.add_mutually_exclusive_group(required=True)
+    rebuilding_input.add_argument("--dump", type=Path)
+    rebuilding_input.add_argument("--manifest", type=Path)
     rebuilding.add_argument("--receipts", required=True, type=Path)
     rebuilding.add_argument("--allow-partial", action="store_true")
     rebuilding.add_argument("--layout", choices=("url", "logical"), default=None)
@@ -117,6 +128,17 @@ def main(argv=None):
     try:
         settings = json.loads(args.config.read_text()) if args.config else {}
         options = Options(**settings)
+        if args.command == "split":
+            if not 1 <= args.target_mb <= 100:
+                raise ValueError("--target-mb must be between 1 and 100")
+            output = args.output.resolve()
+            if output == checkout or checkout in output.parents:
+                raise ValueError("Inventory parts must be outside the source checkout")
+            result = split_inventory(
+                args.dump, args.output, args.target_mb * 1_000_000, options.reserve_bytes
+            )
+            print(json.dumps(result, indent=2))
+            return 0
         if args.command == "doctor":
             result = doctor(args.destination, options.reserve_bytes, args.write_probe)
             print(json.dumps(result, indent=2))
@@ -155,9 +177,19 @@ def main(argv=None):
         os.environ["TMPDIR"] = str(scratch)
         tempfile.tempdir = str(scratch)
         if args.command == "plan":
+            source = args.manifest or args.dump
             if not archive.meta("plan_complete"):
-                storage_check(archive, options, args.dump.stat().st_size * 3)
-            result = plan(archive, args.dump, args.evidence_db, args.allow_partial, args.layout)
+                size = Inventory(source, manifest=bool(args.manifest)).source_bytes
+                storage_check(archive, options, size * 5)
+            result = plan(
+                archive,
+                source,
+                args.evidence_db,
+                args.allow_partial,
+                args.layout,
+                manifest=bool(args.manifest),
+                reserve_bytes=options.reserve_bytes,
+            )
         elif args.command == "pilot":
             result = create_pilot(archive, args.first)
         elif args.command == "backup":
@@ -165,9 +197,17 @@ def main(argv=None):
             print(json.dumps(result, indent=2))
             return 0
         elif args.command == "rebuild":
-            storage_check(archive, options, args.dump.stat().st_size * 3)
+            source = args.manifest or args.dump
+            size = Inventory(source, manifest=bool(args.manifest)).source_bytes
+            storage_check(archive, options, size * 5)
             result = rebuild(
-                archive, args.dump, args.receipts, options, args.allow_partial, layout=args.layout
+                archive,
+                source,
+                args.receipts,
+                options,
+                args.allow_partial,
+                layout=args.layout,
+                manifest=bool(args.manifest),
             )
         elif args.command == "fetch":
             with archive.db:

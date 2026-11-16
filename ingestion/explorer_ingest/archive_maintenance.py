@@ -12,6 +12,7 @@ from pathlib import Path
 from .archive_catalog import CONTROL, StorageUnavailable, atomic_json, plan, sync_directory
 from .archive_contracts import read_artifact
 from .archive_transfer import artifact_paths, verify
+from .inventory_parts import Inventory
 from .state import digest_file
 
 
@@ -50,7 +51,9 @@ def backup_path(root, relative):
     if path.is_absolute() or ".." in path.parts or "\\" in relative:
         raise ValueError("Unsafe backup path")
     allowed = relative in ("identity.json", "archive.sqlite3") or re.fullmatch(
-        r"(inputs|receipts)/[0-9a-f]{64}\.json", relative
+        r"(?:(inputs|receipts)/[0-9a-f]{64}\.json|"
+        r"inputs/bundles/[0-9a-f]{64}/(?:manifest|part-[0-9]{5})\.json)",
+        relative,
     )
     if not allowed:
         raise ValueError("Unsupported backup member")
@@ -99,7 +102,7 @@ def backup(archive, output, reserve_bytes=1024**3):
                     raise ValueError("Backup filesystem reserve exhausted")
                 destination = backup_path(stage, relative)
                 if relative != "archive.sqlite3":
-                    destination.parent.mkdir(exist_ok=True)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
                     original_size = archive.path(f"{CONTROL}/{relative}").stat().st_size
                     if shutil.disk_usage(output.parent).free - original_size < reserve_bytes:
                         raise ValueError("Backup filesystem reserve exhausted")
@@ -123,19 +126,22 @@ def backup(archive, output, reserve_bytes=1024**3):
             for folder in ("inputs", "receipts"):
                 source = archive.path(f"{CONTROL}/{folder}")
                 if source.exists():
-                    for item in source.iterdir():
-                        if item.is_file():
-                            record(f"{folder}/{item.name}")
+                    for item in source.rglob("*"):
+                        if item.is_symlink():
+                            raise ValueError("Backup symlinks are forbidden")
+                        if item.is_file() and not item.name.endswith(".tmp"):
+                            record(str(item.relative_to(archive.control)))
             manifest.flush()
 
             os.fsync(manifest.fileno())
         header = {
-            "format_version": 1,
+            "format_version": 2 if archive.meta("source_bundle") else 1,
             "archive_uuid": archive.marker["uuid"],
             "source_sha256": archive.meta("source_sha256"),
             "files": count,
             "files_sha256": digest_file(stage / "files.jsonl"),
             "contains_originals": False,
+            "source_bundle": archive.meta("source_bundle"),
         }
         atomic_json(stage / "backup.json", header)
         check_destination()
@@ -147,11 +153,12 @@ def backup(archive, output, reserve_bytes=1024**3):
     return header
 
 
-def inspect_backup(source):
+def inspect_backup(source, scratch_root=None):
     source = Path(source).resolve(strict=True)
     header = json.loads((source / "backup.json").read_text())
     if (
-        header.get("format_version") != 1
+        header.get("format_version") not in (1, 2)
+        or (header.get("format_version") == 2 and not header.get("source_bundle"))
         or header.get("contains_originals") is not False
         or type(header.get("files")) is not int
         or header["files"] < 2
@@ -162,7 +169,7 @@ def inspect_backup(source):
     ):
         raise ValueError("Backup manifest checksum mismatch")
     # Disk-backed unique registry avoids loading a million receipt names in RAM.
-    with tempfile.TemporaryDirectory(prefix="pw010-restore-check-") as directory:
+    with tempfile.TemporaryDirectory(prefix="pw010-restore-check-", dir=scratch_root) as directory:
         db = sqlite3.connect(Path(directory) / "members.sqlite3")
         try:
             db.execute("CREATE TABLE members(path TEXT PRIMARY KEY)")
@@ -175,11 +182,23 @@ def inspect_backup(source):
                     if path.stat().st_size != item["bytes"] or digest_file(path) != item["sha256"]:
                         raise ValueError("Backup member checksum mismatch")
                     count += 1
-            for required in (
-                "identity.json",
-                "archive.sqlite3",
-                f"inputs/{header['source_sha256']}.json",
-            ):
+            required_members = ["identity.json", "archive.sqlite3"]
+            bundle = header.get("source_bundle")
+            if bundle:
+                relative = Path(bundle["path"]).relative_to(CONTROL)
+                path = backup_path(source, str(relative))
+                if digest_file(path) != bundle["manifest_sha256"]:
+                    raise ValueError("Backup inventory manifest checksum mismatch")
+                inventory = Inventory(path, manifest=True)
+                if inventory.sha256 != header["source_sha256"]:
+                    raise ValueError("Backup inventory source binding mismatch")
+                required_members.append(str(relative))
+                required_members.extend(
+                    str(relative.parent / p["path"]) for p in inventory.manifest["parts"]
+                )
+            else:
+                required_members.append(f"inputs/{header['source_sha256']}.json")
+            for required in required_members:
                 if not db.execute("SELECT 1 FROM members WHERE path=?", (required,)).fetchone():
                     raise ValueError("Backup is missing required metadata")
             if count != header["files"]:
@@ -203,7 +222,7 @@ def restore(destination, source, reserve_bytes=1024**3):
     from .archive_observer import doctor
 
     doctor(root, reserve_bytes)
-    source, header = inspect_backup(source)
+    source, header = inspect_backup(source, scratch_root=root)
     if shutil.disk_usage(root).free < reserve_bytes:
         raise ValueError("Restore filesystem reserve is unavailable")
     # Validate and invalidate the copied ledger before publishing control metadata.
@@ -217,7 +236,7 @@ def restore(destination, source, reserve_bytes=1024**3):
                 item = json.loads(line)
                 original = backup_path(source, item["path"])
                 target = backup_path(stage, item["path"])
-                target.parent.mkdir(exist_ok=True)
+                target.parent.mkdir(parents=True, exist_ok=True)
                 if shutil.disk_usage(root).free - original.stat().st_size < reserve_bytes:
                     raise ValueError("Restore filesystem reserve exhausted")
                 shutil.copyfile(original, target)
@@ -230,6 +249,9 @@ def restore(destination, source, reserve_bytes=1024**3):
             row = db.execute("SELECT value FROM meta WHERE key='source_sha256'").fetchone()
             if not row or json.loads(row[0]) != header["source_sha256"]:
                 raise ValueError("Backup ledger/source binding mismatch")
+            bundle_row = db.execute("SELECT value FROM meta WHERE key='source_bundle'").fetchone()
+            if (json.loads(bundle_row[0]) if bundle_row else None) != header.get("source_bundle"):
+                raise ValueError("Backup ledger/inventory bundle binding mismatch")
             with db:
                 db.execute("INSERT OR REPLACE INTO meta VALUES ('last_full_audit','null')")
                 db.execute("UPDATE assets SET status='pending',error=NULL")
@@ -267,11 +289,18 @@ def restore(destination, source, reserve_bytes=1024**3):
     }
 
 
-def rebuild(archive, dump, receipts, options, allow_partial=False, layout=None):
+def rebuild(archive, dump, receipts, options, allow_partial=False, layout=None, manifest=False):
     """Recreate a missing ledger only; caller must reserve the recovery lease."""
     if archive.meta("plan_complete"):
         raise ValueError("Rebuild requires a new/missing ledger")
-    result = plan(archive, dump, allow_partial=allow_partial, layout=layout)
+    result = plan(
+        archive,
+        dump,
+        allow_partial=allow_partial,
+        layout=layout,
+        manifest=manifest,
+        reserve_bytes=options.reserve_bytes,
+    )
     copied = 0
     for row in archive.db.execute("SELECT * FROM assets"):
         _, _, target = artifact_paths(archive, row)
@@ -287,7 +316,7 @@ def rebuild(archive, dump, receipts, options, allow_partial=False, layout=None):
         if digest_file(path) != receipt["sha256"]:
             raise ValueError("Recovery original checksum mismatch; preserve and quarantine it")
         if source.resolve() != target.resolve():
-            target.parent.mkdir(exist_ok=True)
+            target.parent.mkdir(parents=True, exist_ok=True)
             if target.exists() and target.read_bytes() != source.read_bytes():
                 raise ValueError("Recovery would replace an existing receipt")
             shutil.copyfile(source, target)

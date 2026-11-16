@@ -36,6 +36,7 @@ from .archive_contracts import read_artifact, validate_artifact
 from .archive_faults import boundary
 from .archive_limits import ValidationBudgetError, run_limited
 from .archive_selection import asset_rows, pilot_status
+from .inventory_parts import archive_inventory
 from .state import digest_file
 from .transport import tls_context
 
@@ -635,6 +636,11 @@ def fetch(archive, options, limit=0, allow_partial=False, pilot=False):
 
 def verify(archive, options, limit=0, pilot=False):
     archive.ready()
+    # Every failed/interrupted audit, including source verification, invalidates
+    # historical success before doing work that may fail.
+    with archive.db:
+        archive.set_meta("last_full_audit", None)
+        archive.set_meta("pilot_audit", None)
     log_event(archive, "verification_ledger_start", pilot=pilot)
     # A pilot certifies its selected records/files. Full-corpus audits inspect
     # every ledger table. Older SQLite versions retain the full-check fallback.
@@ -653,12 +659,11 @@ def verify(archive, options, limit=0, pilot=False):
     ):
         raise IntegrityError("Download ledger failed SQLite integrity checks")
     log_event(archive, "verification_source_start", pilot=pilot)
-    source = archive.path(f"{CONTROL}/inputs/{archive.meta('source_sha256')}.json")
-    if digest_file(source) != archive.meta("source_sha256"):
+    source = archive_inventory(archive)
+    if source.sha256 != archive.meta("source_sha256"):
         raise IntegrityError("Stored source inventory checksum mismatch")
-    with archive.db:
-        archive.set_meta("last_full_audit", None)
-        archive.set_meta("pilot_audit", None)
+    if source.is_bundle:
+        source.scan(check=archive.check)
     log_event(archive, "verification_files_start", pilot=pilot)
     failures = checked = fully_checked = 0
     manifest_name = "pilot-verified-files.jsonl" if pilot else "verified-files.jsonl"

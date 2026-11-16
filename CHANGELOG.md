@@ -6,6 +6,16 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Lossless, checksummed 75 MB JSON inventory partitions with offline split/read-back
+  verification and independent `--manifest` downloader inputs. Preserve origin
+  identity, hierarchy/order, every asset/page/occurrence and existing pilot files.
+- Resumable part pinning and batched SQLite import; bundle-aware full source audit,
+  metadata backup/restore, missing-ledger rebuild and audited downstream adoption.
+  Failed source verification now invalidates previous successful audits.
+- Convert the completed local snapshot into 24 verified parts (1,769,830,164
+  bytes), attach it without moving originals or changing pilot state, and pass a
+  fresh offline audit of every part plus all 250 previously downloaded PDFs.
+
 - Complete the authorized 250-PDF Data Set 1 pilot with normal age-confirmed
   session access, matching source sizes/ETags, resumable stop and fresh scoped
   SHA-256/PDF/placement audit. Record the external artifact locations and evidence.

@@ -7,6 +7,7 @@ from pathlib import Path
 from .archive_catalog import CONTROL, Archive, report
 from .archive_contracts import read_artifact, validate_artifact
 from .inventory import import_inventory
+from .inventory_parts import archive_inventory
 from .state import digest_file, fingerprint
 
 
@@ -30,9 +31,12 @@ def adopt_archive(store, destination):
         stack.callback(archive.close)
         binding = audit_binding(archive)
         source_sha = archive.meta("source_sha256")
-        source = archive.path(f"{CONTROL}/inputs/{source_sha}.json")
-        if digest_file(source) != source_sha:
+        inventory = archive_inventory(archive)
+        if inventory.sha256 != source_sha:
             raise ValueError("Stored inventory checksum mismatch")
+        if inventory.is_bundle:
+            inventory.scan(check=archive.check)
+        source = inventory if inventory.is_bundle else inventory.path
         # Validate into a disk-backed temporary registry before importing anything.
         store.db.execute("DROP TABLE IF EXISTS temp.adoption")
         store.db.execute("CREATE TEMP TABLE adoption(id TEXT PRIMARY KEY,path TEXT,sha TEXT)")
