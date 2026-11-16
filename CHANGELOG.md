@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 3: scoped, checksummed pilot/full handoffs with read-only archive
+  access, receipt/original verification, preserved placements and atomic publication.
+
 - Corpus stage 2: read-only Explorer baseline schema/hash inspection and explicit
   LFS materialization into external storage, without replacing the tracked pointer.
 

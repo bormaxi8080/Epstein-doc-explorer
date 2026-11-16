@@ -23,7 +23,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | --- | --- | --- |
 | 1 | Contracts and stable identities | Implemented |
 | 2 | Real upstream baseline and compatibility checks | Implemented; real materialization recorded separately |
-| 3 | Verified pilot/full source selection | Pending |
+| 3 | Verified pilot/full source selection | Implemented |
 | 4 | Durable leased job queue | Pending |
 | 5 | External storage and resource limits | Pending |
 | 6 | File/document/page registry | Pending |
@@ -50,3 +50,13 @@ The pinned LFS object was materialized on 2026-11-16 at
 `a26cfa2d0daa17d32c0d884b6e13062009a9d473d96268c3cd8a77136b0c7c26`,
 with 25,232 documents and 107,030 RDF triples. Read-only quick_check and required
 Explorer columns passed. The tracked LFS pointer was retained unchanged.
+
+## Source handoff
+
+`freeze_sources` takes a short shared archive lease and requires a successful
+matching pilot/full audit. It verifies ledger, receipt, membership and original
+hashes, then publishes `sources.jsonl` and `selection.json` atomically in a new
+derived directory. It preserves every source occurrence and copies no originals.
+The frozen selection is independent of later unrelated archive downloads; each
+original is still checked before processing. Network/model calls never retain
+the downloader lease. A changed frozen selection is rejected.
