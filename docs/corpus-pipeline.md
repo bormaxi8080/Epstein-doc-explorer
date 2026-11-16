@@ -27,7 +27,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 4 | Durable leased job queue | Implemented |
 | 5 | External storage and resource limits | Implemented |
 | 6 | File/document/page registry | Implemented |
-| 7 | Native extraction and isolated rendering | Pending |
+| 7 | Native extraction and isolated rendering | Implemented |
 | 8 | Multimodal FCC transport | Pending |
 | 9 | OCR, quality checks and pilot | Pending |
 | 10 | Canonical text and page maps | Pending |
@@ -89,3 +89,12 @@ metadata. Page rows use `(doc_id,page)` identities. Source reads use short
 read-only ledger access and verify the original hash on first use or stat change;
 an eight-entry worker cache avoids rehashing an unchanged PDF for every page.
 Root identity and file stamps are checked again after each operation.
+
+## PDF workers
+
+PDFium 5.15.2 and Pillow 12.3.0 are pinned. Each inspection/extraction/render is
+a disposable process with CPU, wall-time, RSS and file-size budgets. Parallel
+PDFium work uses processes, never simultaneous threads. The parent only reads
+bounded metadata. Rendering records source geometry, intrinsic rotation, DPI
+and dimensions. Native quality detects stamp-only, short, repetitive and broken
+layers; this heuristic is routing evidence, not an OCR accuracy guarantee.

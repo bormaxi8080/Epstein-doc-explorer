@@ -78,7 +78,7 @@ def run_limited(command, payload, options, check=lambda: None):
         process.communicate()
 
 
-def worker_limits(seconds, memory_mb, parent_pid):
+def worker_limits(seconds, memory_mb, parent_pid, file_bytes=0):
     import math
     import resource
     import signal
@@ -88,7 +88,7 @@ def worker_limits(seconds, memory_mb, parent_pid):
     resource.setrlimit(
         resource.RLIMIT_CPU, (max(1, math.ceil(seconds)), max(2, math.ceil(seconds) + 1))
     )
-    resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
+    resource.setrlimit(resource.RLIMIT_FSIZE, (file_bytes, file_bytes))
     if sys.platform.startswith("linux"):
         resource.setrlimit(resource.RLIMIT_AS, (memory_mb * 1024**2, memory_mb * 1024**2))
 

@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 7: pinned isolated PDFium/Pillow page extraction and rendering,
+  native-layer quality routing, geometry and explicit pixel/output budgets.
+
 - Corpus stage 6: resumable source registry, content-based document deduplication,
   page identities and checked original access without long downloader locks.
 
