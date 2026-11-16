@@ -146,7 +146,7 @@ def ocr_page(corpus, doc_id, page, provider, dpi=200, before_call=None, after_ca
     return reference
 
 
-def review_page(corpus, doc_id, page, no_body_text=False):
+def review_page(corpus, doc_id, page, no_body_text=False, reviewer=None, reason=None):
     row = corpus.db.execute(
         "SELECT selected_ref FROM corpus_pages WHERE doc_id=? AND page=?", (doc_id, page)
     ).fetchone()
@@ -156,6 +156,8 @@ def review_page(corpus, doc_id, page, no_body_text=False):
     provenance = {
         **value["provenance"],
         "reviewed": True,
+        "reviewer": reviewer,
+        "reason": reason,
         "previous_page_sha256": json.loads(row[0])["sha256"],
     }
     return select_page(

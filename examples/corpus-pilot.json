@@ -1,0 +1,13 @@
+{
+  "root": "/Volumes/Transcend/data/EA-ocr/pilot-250",
+  "model": "claude-3-freecc-no-thinking/open_router/inclusionai/ling-3.2-flash:free",
+  "routing_revision": "free-pilot-1",
+  "base_url": "http://127.0.0.1:8082",
+  "max_calls_per_run": 300,
+  "max_calls_total": 1000,
+  "minimum_call_interval": 5,
+  "dpi": 200,
+  "force_ocr": true,
+  "max_fragment_bytes": 12000,
+  "limits": {"reserve_bytes": 5368709120, "worker_memory_mb": 512}
+}

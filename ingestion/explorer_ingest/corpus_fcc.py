@@ -44,8 +44,9 @@ class FCCConfig:
 
 
 class FCCMessages:
-    def __init__(self, config, api_key=""):
+    def __init__(self, config, api_key="", recorder=None):
         self.config, self.api_key = config, api_key
+        self.recorder = recorder
 
     def identity(self):
         return asdict(self.config)
@@ -121,6 +122,8 @@ class FCCMessages:
         if len(raw) > c.max_response_bytes:
             raise FCCFailure("FCC response exceeds byte budget")
         try:
+            if self.recorder:
+                self.recorder(raw)
             result = json.loads(raw)
             if result.get("stop_reason") != "end_turn":
                 raise FCCFailure("FCC response is truncated or incomplete")
@@ -129,7 +132,11 @@ class FCCMessages:
                 b.get("type") not in ("text", "thinking", "redacted_thinking") for b in blocks
             ):
                 raise FCCFailure("FCC returned unsupported content/tool blocks")
-            output = json.loads("".join(b["text"] for b in blocks if b.get("type") == "text"))
+            body = "".join(b["text"] for b in blocks if b.get("type") == "text").strip()
+            # Accept only one complete fenced JSON block; no prose/tool extraction.
+            if body.startswith("```json\n") and body.endswith("\n```"):
+                body = body[8:-4]
+            output = json.loads(body)
             if not isinstance(output, dict):
                 raise FCCFailure("FCC structured response must be an object")
             return {

@@ -6,6 +6,10 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 15: explicit external-root workflow CLI, verified free-only FCC
+  admission, durable call caps, cooperative pause, rotating logs and read-only
+  coverage/status gates. Preserve invalid provider envelopes for diagnosis.
+
 - Corpus stage 14: isolated UTF-8/image processors and bounded ZIP members with
   stable identities/lineage; explicit unsupported media states and scale gates.
 

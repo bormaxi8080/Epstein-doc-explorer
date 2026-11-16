@@ -27,6 +27,8 @@ class JobQueue:
             max_attempts INTEGER NOT NULL, available_at REAL NOT NULL DEFAULT 0,
             owner TEXT, token TEXT, lease_until REAL, result TEXT, error TEXT);
           CREATE INDEX IF NOT EXISTS jobs_ready ON jobs(status,available_at,stage);
+          CREATE TABLE IF NOT EXISTS job_retry_grants(
+            seq INTEGER PRIMARY KEY,job_id TEXT,extra INTEGER,reason TEXT,at REAL);
           CREATE TABLE IF NOT EXISTS job_events(
             seq INTEGER PRIMARY KEY, at REAL NOT NULL, job_id TEXT NOT NULL,
             event TEXT NOT NULL, detail TEXT);
@@ -55,7 +57,7 @@ class JobQueue:
         self.db.execute("BEGIN IMMEDIATE")
         try:
             self.db.execute(
-                """UPDATE jobs SET status=CASE WHEN attempts<max_attempts THEN 'retry' ELSE 'failed' END,
+                """UPDATE jobs SET status=CASE WHEN attempts<max_attempts+COALESCE((SELECT SUM(extra) FROM job_retry_grants g WHERE g.job_id=jobs.id),0) THEN 'retry' ELSE 'failed' END,
                 owner=NULL,token=NULL,lease_until=NULL,error='Previous worker lease expired'
                 WHERE status='running' AND lease_until<=?""",
                 (now,),
@@ -116,7 +118,11 @@ class JobQueue:
             state = (
                 "done"
                 if error is None
-                else ("retry" if retryable and row["attempts"] < row["max_attempts"] else "failed")
+                else (
+                    "retry"
+                    if retryable and row["attempts"] < row["max_attempts"] + self.granted(job_id)
+                    else "failed"
+                )
             )
             self.db.execute(
                 """UPDATE jobs SET status=?,result=?,error=?,available_at=?,owner=NULL,
@@ -151,3 +157,53 @@ class JobQueue:
             "states": states,
             "complete": bool(states) and sum(states.values()) == states.get("done", 0),
         }
+
+    def granted(self, job_id):
+        return self.db.execute(
+            "SELECT COALESCE(SUM(extra),0) FROM job_retry_grants WHERE job_id=?", (job_id,)
+        ).fetchone()[0]
+
+    def retry_failed(self, job_id, reason, extra=1):
+        if not reason.strip() or not 1 <= extra <= 3:
+            raise ValueError("Recovery needs a reason and bounded attempts")
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self.db.execute(
+                "SELECT * FROM jobs WHERE id=? AND status='failed'", (job_id,)
+            ).fetchone()
+            if not row:
+                raise ValueError("Only failed jobs can receive retry grants")
+            self.db.execute(
+                "INSERT INTO job_retry_grants(job_id,extra,reason,at) VALUES (?,?,?,?)",
+                (job_id, extra, reason, time.time()),
+            )
+            self.db.execute("UPDATE jobs SET status='retry',available_at=0 WHERE id=?", (job_id,))
+            self.db.execute(
+                "INSERT INTO job_events(at,job_id,event,detail) VALUES (?,?,'operator_retry',?)",
+                (time.time(), job_id, reason),
+            )
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
+
+    def supersede(self, job_id, replacement, reason):
+        old = self.db.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        new = self.db.execute("SELECT * FROM jobs WHERE id=?", (replacement,)).fetchone()
+        if (
+            not reason.strip()
+            or not old
+            or not new
+            or old["id"] == new["id"]
+            or old["stage"] != new["stage"]
+            or old["status"] == "running"
+        ):
+            raise ValueError("Invalid replacement job")
+        a, b = json.loads(old["payload"]), json.loads(new["payload"])
+        if any(a.get(k) != b.get(k) for k in ("doc_id", "page")):
+            raise ValueError("Replacement belongs to another page/document")
+        self.db.execute("UPDATE jobs SET status='superseded' WHERE id=?", (job_id,))
+        self.db.execute(
+            "INSERT INTO job_events(at,job_id,event,detail) VALUES (?,?,'superseded',?)",
+            (time.time(), job_id, json.dumps(dict(replacement=replacement, reason=reason))),
+        )

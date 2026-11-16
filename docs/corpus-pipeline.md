@@ -35,7 +35,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 12 | Tags, entities and graph | Implemented |
 | 13 | Compatible export, API and UI | Implemented |
 | 14 | Other formats and scale validation | Implemented for image/text/ZIP; media routes gated |
-| 15 | Bounded full-corpus operation | Pending |
+| 15 | Bounded full-corpus operation | Implemented; real acceptance gates below |
 
 Every implemented stage has regression tests and an Unreleased changelog entry.
 Network/model operations are explicit; offline tests use synthetic loopback
@@ -180,3 +180,43 @@ completed OCR. FCC's current text/image contract is not an audio API. Synthetic
 tests include more than 100,000 graph rows and malformed container budgets.
 Only 250 real PDF originals are locally available; a 5,000-file representative
 acceptance run remains an operational gate, not synthetic evidence of accuracy.
+
+## Operational commands
+
+Run `.venv/bin/python scripts/process_corpus.py --config examples/corpus-pilot.json COMMAND`.
+Config paths are separate from the frozen selection, input inventory, downloader
+destination and baseline. Secrets come only from `FCC_API_KEY`. Nothing starts
+after import. Commands: init, freeze, import, plan, work, text, analyze-plan,
+synthesize, review-page, approve, export, status and preflight. `--help` documents
+each argument. Init requires an existing empty external directory. The example
+points to the already initialized pilot; do not initialize it again.
+
+`work --limit 500` performs only local inspection/extraction. Model jobs require
+`work --stage ocr --limit 250 --allow-fcc` or `--stage analyze`. Every invocation
+revalidates the explicitly free image route. There is no paid fallback. A durable
+attempt ledger counts calls before sending them, including ambiguous outcomes,
+with both invocation and lifetime caps. Manual pilot calls count toward the same
+lifetime ceiling. HTTP 429/retryable provider errors pause work and retain jobs;
+rerun after the provider's quota window. Never rotate accounts to bypass quotas.
+SIGINT/SIGTERM finish the current bounded job then pause. An exclusive corpus
+operator lock serializes mutations; do not mix custom API writers with the CLI.
+Queue acceptance is fenced; immutable orphan artifacts can remain after crashes.
+Logs rotate on the external root and omit document text/credentials. FCC envelopes
+are retained externally for diagnosis, including invalid structured responses.
+
+`status` is read-only. Exit 3 means incomplete/paused, exit 2 is an operation
+failure, exit 0 is a completed command (only status/work 0 means full approved
+coverage). Coverage, review, unsupported formats and failed jobs are separate.
+Queue exhaustion alone never means archive completion. Private export explicitly
+requires `--include-unreviewed`; public export requires individual approvals.
+
+Operational gates remain: more representative originals (5,000-file strata),
+manual OCR/evidence accuracy review, confirmed audio/video conversion routes,
+and disk/time/cost projections from measured real pages. The actual inventory has
+1,396,719 unique linked assets, not 14 million; PDF page counts are not known from
+that inventory. Do not schedule the full archive based on a guessed page count.
+
+Recovery is explicit: `retry-job JOB --reason TEXT --extra 1` grants at most three
+additional attempts without erasing past attempts/events or bypassing call caps.
+When changing routing/text, replan and use `supersede-job OLD NEW --reason TEXT`
+for the same document/page/stage; superseded history is retained separately.
