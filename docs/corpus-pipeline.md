@@ -31,7 +31,7 @@ offsets. The same serialized text must populate TXT and `documents.full_text`.
 | 8 | Multimodal FCC transport | Implemented; live route requires explicit pilot |
 | 9 | OCR, quality checks and pilot | OCR implemented; live pilot recorded separately |
 | 10 | Canonical text and page maps | Implemented |
-| 11 | Chunk analysis and document assembly | Pending |
+| 11 | Chunk analysis and document assembly | Implemented |
 | 12 | Tags, entities and graph | Pending |
 | 13 | Compatible export, API and UI | Pending |
 | 14 | Other formats and scale validation | Pending |
@@ -127,3 +127,13 @@ document's complete page map into RAM. Both files publish before the text
 manifest/DB pointer; incomplete or unreviewed pages cannot silently disappear.
 Private draft assembly can explicitly retain review-required pages. Reassembly
 is idempotent; changed page provenance invalidates analysis and approval.
+
+## Analysis and synthesis
+
+Fragments have a conservative UTF-8 byte budget, not an asserted tokenizer count.
+Exact evidence is checked against each fragment. Truncated/capacity-limited output
+splits deterministically into smaller durable jobs. Assembly requires all leaves.
+Bounded rolling document synthesis consumes every fragment summary and caches
+each merge; it cannot introduce relationships. The original chunk evidence stays
+in a streaming hashed map. This is hierarchical compression, not a guarantee of
+lossless semantic recall. Public approval binds the current text/analysis version.

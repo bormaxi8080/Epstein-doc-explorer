@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Corpus stage 11: bounded resumable evidence fragments, adaptive splits, cached
+  document synthesis and explicit version-bound approval.
+
 - Corpus stage 10: streaming canonical UTF-8 TXT, hashed Unicode page maps,
   immutable text versions, exact coverage and downstream invalidation checks.
 
