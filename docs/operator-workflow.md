@@ -34,6 +34,12 @@ Set FCC_API_KEY through your secret environment. Run the generated fcc_preflight
 before inference: it checks the explicit route/catalogue and zero supported
 prices. Then run bounded model_work with --allow-fcc. Only the explicit
 private_model_work command also admits --allow-review, producing private drafts.
+Generated configs admit 100 calls per run and 1,000 in the corpus lifetime,
+with at least five seconds between calls. These are pilot safeguards, not a full
+archive throughput setting. Increase reviewed local budgets only after measuring
+stratified source batches and checking the configured free route's actual limits.
+A bounded work invocation finishing does not certify the archive. Resume explicit
+batches against the same corpus and inspect separate status/coverage gates.
 Caps, timing, prompt/schema/routing versions and response provenance are durable.
 Changing data invalidates affected results. 429/transport ambiguity pauses and
 retains state; inspect status and retry after the reported cooldown.

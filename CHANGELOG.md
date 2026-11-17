@@ -8,6 +8,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Fixed
 
+- Count preserved Viewer records without calling them available text; show an
+  explicit missing-text state for the three unchanged upstream rows with no text.
+
 - Escape document-derived graph tooltip markup and keep catalogue dialogs above
   mobile navigation; verify folder/search behavior in desktop and mobile Chrome.
 

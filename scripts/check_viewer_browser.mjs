@@ -20,7 +20,14 @@ sys.path.insert(0,'ingestion')
 from explorer_ingest.distribution_demo import demo_bundle
 from explorer_ingest.synthetic_archive import generate_inventory
 from explorer_ingest.inventory_catalog import build_catalog
+from explorer_ingest.state import digest_file
+import json,sqlite3
 r=Path(sys.argv[1]);demo_bundle(r/'viewer',0)
+db=sqlite3.connect(r/'viewer/document_analysis.db')
+db.execute("INSERT INTO documents(doc_id,file_path,one_sentence_summary,paragraph_summary,category,content_tags,analysis_timestamp) VALUES ('missing-text','missing.txt','SYNTHETIC missing text record','No text included','other','[]','synthetic')")
+db.commit();db.close()
+meta=json.loads((r/'viewer/manifest.json').read_text());meta['database_sha256']=digest_file(r/'viewer/document_analysis.db')
+(r/'viewer/manifest.json').write_text(json.dumps(meta))
 generate_inventory(r/'inventory.json',3)
 build_catalog(r/'inventory.json',r/'viewer/inventory.sqlite3',reserve_bytes=0)
 `,root],{cwd:checkout,stdio:'ignore'});
@@ -33,14 +40,15 @@ async function poll(run){for(let i=0;i<150;i++){try{const v=await run();if(v)ret
 try {
   await poll(async()=>{if(api.exitCode!==null)throw new Error('API exited');return (await fetch(`http://127.0.0.1:${port}/health`)).ok;});
   const profile=path.join(root,'chrome-profile');fs.mkdirSync(profile);
-  chrome=spawn(options['--chrome'],['--headless=new','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-extensions','--disable-sync','--disable-component-update','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1','about:blank'],{env:{...process.env,TMPDIR:root},stdio:['ignore',log,log]});
-  const debugFile=path.join(profile,'DevToolsActivePort');await poll(()=>fs.existsSync(debugFile));
-  const debugPort=fs.readFileSync(debugFile,'utf8').split('\n')[0];
+  chrome=spawn(options['--chrome'],['--headless=new','--disable-gpu','--disable-gpu-vsync','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-extensions','--disable-sync','--disable-component-update','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1','about:blank'],{env:{...process.env,TMPDIR:root},stdio:['ignore',log,log]});
+  const debugFile=path.join(profile,'DevToolsActivePort');
+  const debugPort=await poll(()=>{if(!fs.existsSync(debugFile))return null;const lines=fs.readFileSync(debugFile,'utf8').split('\n');const p=Number(lines[0]);return Number.isInteger(p)&&p>0&&p<65536&&lines[1]?.startsWith('/devtools/browser/')?p:null;});
+  await poll(async()=> (await fetch(`http://127.0.0.1:${debugPort}/json/version`)).ok);
   const target=await (await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`,{method:'PUT'})).json();
   ws=new WebSocket(target.webSocketDebuggerUrl);await once(ws,'open');
   let id=0;const pending=new Map();
   ws.addEventListener('message',event=>{const value=JSON.parse(event.data);const request=pending.get(value.id);if(request){pending.delete(value.id);value.error?request.reject(new Error(value.error.message)):request.resolve(value.result);}});
-  async function call(method,params={}){const requestId=++id;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(requestId);reject(new Error('CDP timeout'));},15000);pending.set(requestId,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});ws.send(JSON.stringify({id:requestId,method,params}));});}
+  async function call(method,params={}){fs.writeSync(log,'CDP '+method+'\n');const requestId=++id;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(requestId);reject(new Error('CDP timeout: '+method));},30000);pending.set(requestId,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});ws.send(JSON.stringify({id:requestId,method,params}));});}
   const evaluate=async expression=>{const r=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw new Error('Browser assertion failed');return r.result.value;};
   const escaped=execFileSync(process.execPath,['--import','tsx','--input-type=module','-e',"import {escapeHtml} from './network-ui/src/html.ts';process.stdout.write(escapeHtml('<img src=x onerror=alert(1)> & \"quoted\"'))"],{cwd:checkout,encoding:'utf8'});
   await call('Page.enable');
@@ -67,7 +75,12 @@ try {
     const shot=await call('Page.captureScreenshot',{format:'png'});
     fs.writeFileSync(path.join(root,name+'.png'),Buffer.from(shot.data,'base64'));
   }
-  fs.writeFileSync(path.join(root,'verification.json'),JSON.stringify({passed:true,synthetic:true,folder_browsing:true,asset_details:true,filename_search:true,desktop_and_mobile:true,source_downloads:0,platform:os.platform()},null,2)+'\n');
+  await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent==='Close archive').click()");
+  await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent==='Documents').click()");
+  await poll(()=>evaluate("[...document.querySelectorAll('button')].some(b=>b.textContent.includes('SYNTHETIC missing text record'))"));
+  await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('SYNTHETIC missing text record')).click()");
+  await poll(()=>evaluate("document.querySelector('[role=alert]')?.textContent.includes('Source text is not included')"));
+  fs.writeFileSync(path.join(root,'verification.json'),JSON.stringify({passed:true,synthetic:true,folder_browsing:true,asset_details:true,filename_search:true,missing_text_explicit:true,desktop_and_mobile:true,source_downloads:0,platform:os.platform()},null,2)+'\n');
   console.log(JSON.stringify({passed:true,output:root}));
   await call('Browser.close').catch(()=>{});
 } finally {

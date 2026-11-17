@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { API_BASE as API } from '../api';
 async function read(url:string,signal?:AbortSignal) {
-  const r=await fetch(API+url,{signal});if(!r.ok)throw new Error('Document request failed');return r.json();
+  const r=await fetch(API+url,{signal});if(!r.ok)throw new Error(r.status===404&&url.endsWith('/text')?'Source text is not included for this preserved record.':'Document request failed');return r.json();
 }
 export type CatalogueDocument={doc_id:string;one_sentence_summary:string;category:string;review_status:string};
 type Page={page:number;text:string;quality:string;method:string;truncated:boolean};

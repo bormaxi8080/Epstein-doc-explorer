@@ -11,7 +11,12 @@ Use Python 3.12 and Node 22.12 or newer. See [scale operations](scale-operations
 for bounded documents; 3.11+ is required for streamed large SQLite text. Set an
 existing external root in examples/workspace.json, copied outside Git.
 
+Use the published fork URL supplied with the release. Skip automatic LFS payload
+retrieval when cloning; the external data package supplies the required databases.
+
 ```bash
+GIT_LFS_SKIP_SMUDGE=1 git clone YOUR_PUBLISHED_FORK_URL Epstein-doc-explorer
+cd Epstein-doc-explorer
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --require-hashes -r requirements/build.lock -r requirements/processor.lock
 .venv/bin/python -m pip install --no-index --no-deps --no-build-isolation -e .

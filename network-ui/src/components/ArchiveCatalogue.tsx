@@ -11,7 +11,7 @@ export function DatasetBadge() {
   return <p className="fixed bottom-2 left-2 z-40 max-w-lg bg-gray-900/90 text-white text-xs p-2 rounded" aria-label="Dataset coverage">
     {data.synthetic?'SYNTHETIC DEMO · ':data.private_review?'PRIVATE REVIEW · ':''}
     {data.catalogue?`${data.catalogue.unique_files_count.toLocaleString()} source files · `:''}
-    {data.viewer.documents.toLocaleString()} documents with text · {data.viewer.pending_imported.toLocaleString()} pending review.
+    {data.viewer.documents.toLocaleString()} documents in Viewer · {data.viewer.pending_imported.toLocaleString()} pending review.
     <span className="block">Source inventory and processed text have separate coverage.</span>
   </p>;
 }
