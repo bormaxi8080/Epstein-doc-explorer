@@ -14,6 +14,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Distribution stage 1: portable release schema, external workspace role map,
+  path/collision/version validation and missing-volume regression coverage.
+
 - Verify zero request/image/reasoning/cache prices as well as prompt/completion
   prices before admitting the explicit free FCC route.
 

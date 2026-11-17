@@ -1,0 +1,14 @@
+{
+  "format": "explorer-workspace",
+  "version": 1,
+  "root": "/path/to/external/explorer",
+  "reserve_bytes": 5368709120,
+  "paths": {
+    "packages": "packages",
+    "inventory": "inventory",
+    "downloads": "originals",
+    "corpus": "corpus",
+    "releases": "releases",
+    "scratch": "tmp"
+  }
+}

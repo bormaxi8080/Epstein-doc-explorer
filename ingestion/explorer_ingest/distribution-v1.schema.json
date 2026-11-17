@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Explorer transport release v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "version",
+    "release_id",
+    "minimum_app_version",
+    "created_at",
+    "visibility",
+    "inventory",
+    "artifacts"
+  ],
+  "properties": {
+    "format": {
+      "const": "epstein-explorer-release"
+    },
+    "version": {
+      "const": 1
+    },
+    "release_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$"
+    },
+    "minimum_app_version": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "visibility": {
+      "enum": [
+        "public",
+        "private"
+      ]
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "source_sha256",
+        "unique_assets",
+        "complete"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "unique_assets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "group",
+          "role",
+          "path",
+          "install_path",
+          "encoding",
+          "bytes",
+          "sha256",
+          "content_bytes",
+          "content_sha256"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "group": {
+            "enum": [
+              "inventory-full",
+              "inventory-parts",
+              "inventory-db",
+              "baseline",
+              "viewer",
+              "pilot"
+            ]
+          },
+          "role": {
+            "enum": [
+              "inventory-full",
+              "inventory-manifest",
+              "inventory-part",
+              "inventory-db",
+              "baseline-db",
+              "viewer-db",
+              "viewer-clusters",
+              "viewer-manifest",
+              "viewer-text",
+              "pilot-original",
+              "pilot-selection",
+              "pilot-ocr",
+              "provenance",
+              "catalog-db"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "install_path": {
+            "type": "string"
+          },
+          "encoding": {
+            "enum": [
+              "raw",
+              "gzip"
+            ]
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "content_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "content_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  }
+}
