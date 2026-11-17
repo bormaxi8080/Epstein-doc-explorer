@@ -10,6 +10,7 @@ PW-010 ingestion pipeline. Current fork version: **1.2.0**.
 - [Standalone archive downloader: independent dump/DB/destination paths](docs/archive-downloader.md)
 - [Ingestion setup, commands, contracts and current limits](docs/ingestion.md)
 - [Self-hosting a reviewed bundle](docs/self-hosting.md)
+- [Public data download (Google Drive)](https://drive.google.com/drive/folders/1U_ig4YpEUqFliacqoaI6HmPDrYfxCTN8?usp=share_link)
 - [Prepared data releases and pinned checksums](releases/catalog.json)
 - [Real distribution acceptance](docs/distribution-verification-20261117.md)
 - [Complete-archive capacity and acceptance gates](docs/scale-operations.md)

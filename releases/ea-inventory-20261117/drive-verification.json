@@ -1,0 +1,15 @@
+{
+  "checked_at_utc": "2026-11-17T17:37:23.153315+00:00",
+  "public_folder_url": "https://drive.google.com/drive/folders/1U_ig4YpEUqFliacqoaI6HmPDrYfxCTN8?usp=share_link",
+  "release_folder_url": "https://drive.google.com/drive/folders/1Fu07QkCZZKTYCBv4SuglpHKU3b4qTKV6",
+  "anonymous_folder_listing_verified": true,
+  "release_id": "ea-inventory-20261117",
+  "manifest_file_id": "1KoLubfxdRI-YWfRNgFk5sgGxAjHD3Fs8",
+  "manifest_bytes": 15465,
+  "manifest_sha256": "460936f4a3b50945128d6cbc1b6a6b8384a49e26dc6e17abccab34dd7cada8e9",
+  "manifest_matches_publisher_pin": true,
+  "payload_files_listed": 33,
+  "mapped_artifacts": 33,
+  "all_payload_hashes_download_verified": false,
+  "authenticated_api_fetch_verified": false
+}

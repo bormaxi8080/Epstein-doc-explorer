@@ -1,0 +1,106 @@
+{
+  "format": "explorer-release-sources",
+  "version": 1,
+  "release_sha256": "460936f4a3b50945128d6cbc1b6a6b8384a49e26dc6e17abccab34dd7cada8e9",
+  "artifacts": {
+    "inventory-full": {
+      "drive_file_id": "1Ztu8ADBvi_Fw4Rb753DvuhQZQUIoDPTT"
+    },
+    "parts-manifest": {
+      "drive_file_id": "1mxZnF-HIjUr-VuS4NCqH_UlRu2WMUfQi"
+    },
+    "part-0001": {
+      "drive_file_id": "18jw7kT8mMeaKi5JRjR-Oovgl7UOM9qgb"
+    },
+    "part-0002": {
+      "drive_file_id": "1caWbZvur3GS-ZWERAN4ZugRBacrqH7UJ"
+    },
+    "part-0003": {
+      "drive_file_id": "1Lh1chw5iyFRfQt67w_MzODWugM4bWfdQ"
+    },
+    "part-0004": {
+      "drive_file_id": "12NS-Uv72-GzIy9FbgynbxsVH1UDk8jNA"
+    },
+    "part-0005": {
+      "drive_file_id": "1Jqnzsx-9SNMcm4Hz9lJHNl_0nAEltU3d"
+    },
+    "part-0006": {
+      "drive_file_id": "1XhPbKUJCci1XwPjvuwEGREbkvRTDl922"
+    },
+    "part-0007": {
+      "drive_file_id": "15e7-ee8SukIAve0WeejpgMK0isc0xrC-"
+    },
+    "part-0008": {
+      "drive_file_id": "1UEZ1x6cmUXA_8RoSdC5Nog7uEaUSRP6c"
+    },
+    "part-0009": {
+      "drive_file_id": "1M5m7J1qunBBd79ohGLTzUp4kKpSqqGjP"
+    },
+    "part-0010": {
+      "drive_file_id": "1VkBgaiUSBVMKaZra1FmXra8XC995ITy-"
+    },
+    "part-0011": {
+      "drive_file_id": "1sMg44C43EWC4mFo8p754vNzcDyaZd9fh"
+    },
+    "part-0012": {
+      "drive_file_id": "107zWh1vV_VitT-7ndcjlo2Fz67g2HjSL"
+    },
+    "part-0013": {
+      "drive_file_id": "1gqZWdxfSCkPBtzEtErslCeOs_-4SJFuU"
+    },
+    "part-0014": {
+      "drive_file_id": "1YlfxePLHvknwoPeMLyJwskJ5yLcUL33s"
+    },
+    "part-0015": {
+      "drive_file_id": "1knhiYpxsXGT_fD_QrxTx-j8Fb1C7Po3q"
+    },
+    "part-0016": {
+      "drive_file_id": "1NqysqTRfhVGsZnvsM02AJPJYIm4HeKzV"
+    },
+    "part-0017": {
+      "drive_file_id": "1jkdlJBd-gzqeYe80IegWpgcduVlZ7Qxl"
+    },
+    "part-0018": {
+      "drive_file_id": "19vyLi5pts2YDAYo8QFdM-KBBjyQ0gQTw"
+    },
+    "part-0019": {
+      "drive_file_id": "14aPxjFB0xOJ1Z0wlCFsIH1GeQCCaDaqf"
+    },
+    "part-0020": {
+      "drive_file_id": "1Vu3h4V74UfwtICjVuKi74ZBA6YlwHcVb"
+    },
+    "part-0021": {
+      "drive_file_id": "1S_ygjxW1l2hIkXjaAerfZ4QazpXcUxpm"
+    },
+    "part-0022": {
+      "drive_file_id": "1xc5DNJDAUpDG4n9kGrBTUJFiEAfmzVOx"
+    },
+    "part-0023": {
+      "drive_file_id": "1sbY2btTOEZhdnMX7dqeEROWQcKjJiJIk"
+    },
+    "part-0024": {
+      "drive_file_id": "1rQJuP6GsO6wmZKDEcAcGktdAB6qiGMs3"
+    },
+    "source-sqlite": {
+      "drive_file_id": "1krhQkTm95oN8LbN4L-MKU1IK9avOYQMr"
+    },
+    "baseline-db": {
+      "drive_file_id": "1B3gsC-WRCgUvUnqjz7jfxcNyLClntqSY"
+    },
+    "viewer-0": {
+      "drive_file_id": "1kzrgi5ngU1rPaPcrnPxicB1nYtJ4olBk"
+    },
+    "viewer-1": {
+      "drive_file_id": "17jVNwOHirQz0mwAooVfDiidawmd4Ju9G"
+    },
+    "viewer-2": {
+      "drive_file_id": "1v1NQJHP_DmqofO_nc3KBozGLdZns4kam"
+    },
+    "catalogue": {
+      "drive_file_id": "1ns3zpUL30RcAfzmO5KB0ClRBYhjNwuNJ"
+    },
+    "provenance": {
+      "drive_file_id": "1byUw20dGYIjsiKJDfn58AhdxSif-ksy2"
+    }
+  }
+}

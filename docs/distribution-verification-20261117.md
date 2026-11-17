@@ -3,7 +3,9 @@
 Application 1.2.0, runtime source commit `1a901b45fcc3c28d9379166e0af990ed3ddb59b3`.
 Data payloads remain external; Git contains contracts, code, guides, synthetic
 fixtures, this report, the public descriptor and publisher-pinned checksums.
-Google Drive URLs are deliberately null until the operator uploads the folders.
+At initial packaging, Drive URLs were unset. The operator subsequently supplied
+the public folder; the current [Drive verification record](../releases/ea-inventory-20261117/drive-verification.json)
+records separate cloud checks without changing the local acceptance results.
 
 | Release | Visibility | Artifacts | Transport bytes | All decoded bytes |
 | --- | --- | ---: | ---: | ---: |
@@ -64,8 +66,9 @@ release verification.json files and catalogue build log under the same work root
 
 ## Remaining external acceptance
 
-Real Google Drive API/quota/resource-key behavior awaits an uploaded folder link
-and appropriate access. TLS/domain acceptance awaits a deployment hostname. Neither
+The public Drive folder and all 33 payload names are visible anonymously, and
+the downloaded small manifest matches the publisher pin. Complete cloud payload
+hashes and authenticated API/quota/resource-key behavior remain unverified. TLS/domain acceptance awaits a deployment hostname. Neither
 is inferred from loopback fixtures. The 250-file pilot is not representative of
 all archive formats; audio/video/Office adapters and full-source processing/review
 remain explicit scale gates documented in scale-operations.md. Fresh corpus work

@@ -14,9 +14,10 @@
       "decoded_all_artifacts_bytes": 8475930978,
       "source_sha256": "7e4791264d49dd256c1eaaf381e5da0764d2bc4d39f7fea56614abce740a47b8",
       "unique_assets": 1396719,
-      "google_drive_folder_url": null,
+      "google_drive_folder_url": "https://drive.google.com/drive/folders/1U_ig4YpEUqFliacqoaI6HmPDrYfxCTN8?usp=share_link",
       "sources_url": null,
-      "descriptor_path": "releases/ea-inventory-20261117/release.json"
+      "descriptor_path": "releases/ea-inventory-20261117/release.json",
+      "source_map_path": "releases/ea-inventory-20261117/sources.json"
     },
     {
       "release_id": "ea-pilot-250-private-20261117",

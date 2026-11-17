@@ -4,6 +4,8 @@ Choose a ready Viewer or the acquisition/OCR workflow. Source code, data release
 and working state are separate. Start with [distribution](distribution.md) and the
 publisher-pinned release SHA. Existing source data and historical reports remain
 unchanged; no Git LFS pull is needed when using an external release.
+Download the [public data folder](https://drive.google.com/drive/folders/1U_ig4YpEUqFliacqoaI6HmPDrYfxCTN8?usp=share_link)
+and follow the [pinned release catalogue](../releases/catalog.json).
 
 ## Native setup (macOS/Linux)
 
@@ -38,7 +40,7 @@ OCR pages, review state and evidence are available in the UI/API.
 
 `explorer-data demo --output /external/new-demo` creates one approved SYNTHETIC
 text document and no real relationships, downloads or model calls. It is useful
-for first installation checks before a Drive link exists. Its database, clusters
+for first installation checks without downloading real data. Its database, clusters
 and TXT can be used directly as a Viewer bundle. It is not archive processing.
 
 ## Docker Viewer

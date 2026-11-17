@@ -4,6 +4,12 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ## Unreleased
 
+### Added
+
+- Register the operator-supplied public Google Drive folder, verify its manifest
+  against the publisher pin, and map all 33 listed payloads to Drive file IDs.
+  Document browser/offline import and the separate authenticated API path.
+
 ## 1.2.0 — 2026-11-17
 
 ### Fixed

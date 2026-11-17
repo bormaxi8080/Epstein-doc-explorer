@@ -30,7 +30,7 @@ free reserve are checked. Installation must not initialize or fetch implicitly.
 
 1. Release contract and portable workspace: implemented.
 2. Offline builder and semantic verification: implemented.
-3. Resumable acquisition/import and Drive file adapter: implemented; real shared-folder validation awaits an operator link.
+3. Resumable acquisition/import and Drive file adapter: implemented; public folder/manifest checked, full API transfer acceptance remains pending.
 4. Native/container installation and read-only doctor: implemented; acceptance records follow below.
 5. Workflow config generation, portable private pilot and fresh-audit adoption: implemented.
 6. Full inventory catalogue integration and release activation: implemented.
@@ -69,7 +69,10 @@ and download permissions. Public browser sharing alone is not the API credential
 setup. See the [official download contract](https://developers.google.com/workspace/drive/api/guides/manage-downloads).
 Tokens/resource keys are never stored in partial metadata. Cross-origin redirects
 strip authorization. Browser-downloaded files can go directly through offline import.
-No shared-folder URL is available yet; real Drive behavior has not been tested.
+The [public Drive folder](https://drive.google.com/drive/folders/1U_ig4YpEUqFliacqoaI6HmPDrYfxCTN8?usp=share_link) is available.
+Its manifest matches the publisher-pinned SHA and all 33 payload filenames are
+listed anonymously. Full payload hashes and authenticated API transfers have not
+yet been tested from Drive.
 
 ```bash
 explorer-data fetch --manifest /external/release.json --expected-sha256 PUBLISHER_SHA256 --sources /external/sources.json --destination /external/empty-package --profile pipeline
@@ -180,9 +183,10 @@ explorer-data source-map --manifest /external/package/release.json --mapping /ex
 This validates every entry and emits the fetch-compatible map without network
 requests. Share release.json, the independent pinned SHA and sources.json with
 recipients. A browser download followed by offline import is also supported.
-Drive quotas/access prompts are provider behavior: no real folder is claimed
-validated until the operator supplies an uploaded link and an actual retrieval
-passes hash verification. Uploading or source-map generation does not publish code.
+Drive quotas/access prompts are provider behavior. The public folder listing and
+small manifest retrieval have been verified; full payload integrity, API quotas
+and resume still require actual authenticated transfers. Uploading or source-map
+generation does not publish code.
 
 Use --profile complete to install parts, paired producer SQLite, full catalogue,
 pristine baseline and ready public Viewer together. prepare-workflow then includes
@@ -206,7 +210,32 @@ and the [public descriptor](../releases/ea-inventory-20261117/release.json).
 See [real acceptance results](distribution-verification-20261117.md) for package
 sizes, checksums, prepared external folders and tested platforms. The release date
 is the packaging date; frozen crawl timestamps remain in the unchanged inventory
-metadata. The Google Drive link/source-map URLs remain null until operator upload.
+metadata. The public Drive folder is recorded in the release catalogue; the private
+folder and a separately hosted source-map URL remain unset. A checked-in source
+map is available through the public entry's source_map_path.
 Private review data has a separately pinned descriptor hash and is not a public
 mirror. Viewer and pilot profiles can be installed into separate new directories
 from that same private package, each with --allow-drafts and the same expected SHA.
+
+## Public Google Drive package
+
+Download the [public folder](https://drive.google.com/drive/folders/1U_ig4YpEUqFliacqoaI6HmPDrYfxCTN8?usp=share_link)
+with its nested ea-inventory-20261117 directory and payload paths unchanged.
+The [Drive verification record](../releases/ea-inventory-20261117/drive-verification.json)
+records anonymous listing and the 15,465-byte manifest download. The manifest SHA
+is 460936f4a3b50945128d6cbc1b6a6b8384a49e26dc6e17abccab34dd7cada8e9.
+All 33 uploaded payload names map one-to-one to the immutable release descriptor;
+their complete byte hashes have not been downloaded and verified from Drive.
+
+For browser-downloaded data, unpack any Drive-created ZIP on the external disk,
+then run offline import against the nested release directory. For explicit API
+acquisition, use the [prepared source map](../releases/ea-inventory-20261117/sources.json):
+
+```bash
+explorer-data fetch --manifest releases/ea-inventory-20261117/release.json --expected-sha256 460936f4a3b50945128d6cbc1b6a6b8384a49e26dc6e17abccab34dd7cada8e9 --sources releases/ea-inventory-20261117/sources.json --destination /external/empty-package --profile pipeline
+```
+
+This API command requires a valid EXPLORER_DRIVE_TOKEN in the private environment,
+as described above; public folder access alone does not configure API credentials.
+No full archive or model work starts from opening the folder or reading the map.
+Private review data retains its separate access/review gate and has no public link.
