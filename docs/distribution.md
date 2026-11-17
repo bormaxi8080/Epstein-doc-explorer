@@ -29,7 +29,7 @@ free reserve are checked. Installation must not initialize or fetch implicitly.
 ## Implementation milestones
 
 1. Release contract and portable workspace: implemented.
-2. Offline builder, verification and data-folder preparation: next.
+2. Offline builder and semantic verification: implemented; real data folder is prepared after acceptance.
 3. Resumable acquisition/import and Google Drive adapter: next.
 4. Reproducible Viewer and processor installation: next.
 5. Downloader/OCR operator workflow and portable pilot: next.
@@ -38,3 +38,16 @@ free reserve are checked. Installation must not initialize or fetch implicitly.
 
 Only verified milestones will be marked implemented. Live downloads/inference and
 public publication remain separate explicit commands.
+
+## Offline builder
+
+`explorer-data build --recipe /external/recipe.json --output /external/new-release`
+creates an immutable release and independently decodes/verifies it before rename.
+Recipe artifacts explicitly list absolute source paths and portable target paths;
+recipes with machine paths stay outside Git. Gzip inputs require their expected
+uncompressed size. `explorer-data verify /external/release` repeats checks.
+Private builds/verification require `--allow-drafts`. Producer SQLite is evidence;
+JSON remains authoritative. Matching snapshot/counts are checked, alongside full
+JSON/parts semantic signatures when both are present. Public viewer databases
+must contain no pending imported documents and match their bundle manifest/TXT.
+All build and verification scratch is on the selected external filesystem.

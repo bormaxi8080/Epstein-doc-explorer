@@ -15,6 +15,8 @@ dev = ["ruff==0.17.3"]
 [project.scripts]
 explorer-ingest = "explorer_ingest.cli:main"
 explorer-download = "explorer_ingest.archive_cli:main"
+explorer-data = "explorer_ingest.distribution_cli:main"
+explorer-corpus = "explorer_ingest.corpus_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["ingestion"]

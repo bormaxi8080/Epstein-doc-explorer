@@ -14,6 +14,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Distribution stage 2: bounded gzip release builder, standalone database and
+  inventory-pair checks, whole/parts semantic verification and private draft gates.
+
 - Distribution stage 1: portable release schema, external workspace role map,
   path/collision/version validation and missing-volume regression coverage.
 
