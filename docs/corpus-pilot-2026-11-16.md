@@ -1,5 +1,8 @@
 # Corpus implementation and real pilot — 2026-11-16
 
+Historical OCR snapshot. The [November 17 continuation](corpus-pilot-2026-11-17.md)
+completed all 250 private draft analyses and records the current bundle.
+
 ## Result and scope
 
 The core staged workflow is implemented with separate stage commits, regression

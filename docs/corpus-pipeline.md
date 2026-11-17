@@ -313,8 +313,9 @@ Known ZIP-based Office extensions remain unsupported documents; their internal
 XML is not misrepresented as page OCR. Generic ZIP archives still expand with
 member provenance and bounds.
 
-See [the real pilot record](corpus-pilot-2026-11-16.md) for observed coverage,
-provider/quality limits, baseline issue preservation and exact artifact paths.
+See [the completed private pilot record](corpus-pilot-2026-11-17.md) for observed
+coverage, provider/quality limits, baseline issue preservation and exact artifact
+paths.
 
 Real v2 responses sometimes echoed schema declarations or added $schema/$id.
 Prompt v3 uses a data-instance template and concise field constraints; the strict

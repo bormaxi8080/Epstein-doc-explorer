@@ -30,9 +30,10 @@ Changes to this fork are recorded here; upstream history remains in Git.
   retire obsolete prompt jobs with history. Work limits now count every claimed
   job, including failed jobs, instead of counting successful results only.
 
-- Record the authorized real pilot: 250/250 OCR pages after bounded recovery from
-  HTTP 429, 250 matching TXT/SQLite drafts, and five validated v3 draft analyses.
-  Preserve upstream data issues and document remaining analysis/review gates.
+- Complete the authorized 250-file private pilot: 250 OCR pages, matching TXT/SQLite
+  drafts and validated document analyses. Verify the new immutable bundle and all
+  15 draft evidence quotes through the local API; retain human review gates and
+  unchanged originals/upstream data. Record bounded provider recovery and paths.
 
 - Keep Office ZIP containers explicitly unsupported instead of treating internal
   XML as completed page OCR; include GIF raster input.
