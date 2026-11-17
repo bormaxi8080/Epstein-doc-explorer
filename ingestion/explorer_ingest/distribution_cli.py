@@ -3,7 +3,11 @@
 import argparse
 import json
 
-from .distribution_contracts import load_workspace
+from jsonschema import ValidationError
+
+from .distribution_contracts import PROFILES, load_workspace
+from .distribution_fetch import Paused, fetch_release
+from .distribution_install import import_release, verify_install
 from .distribution_release import build_release, verify_release
 
 
@@ -20,6 +24,25 @@ def parser():
     for cmd in (build, check):
         cmd.add_argument("--reserve-bytes", type=int, default=1024**3)
         cmd.add_argument("--allow-drafts", action="store_true")
+    fetch = sub.add_parser("fetch")
+    fetch.add_argument("--manifest", required=True)
+    fetch.add_argument("--expected-sha256", required=True)
+    fetch.add_argument("--sources", required=True)
+    fetch.add_argument("--destination", required=True)
+    fetch.add_argument("--allow-host", action="append", default=[])
+    fetch.add_argument("--allow-loopback", action="store_true")
+    fetch.add_argument("--timeout", type=int, default=60)
+    install = sub.add_parser("import")
+    install.add_argument("package")
+    install.add_argument("--output", required=True)
+    install.add_argument("--expected-sha256", required=True)
+    installed = sub.add_parser("verify-install")
+    installed.add_argument("directory")
+    for cmd in (fetch, install):
+        cmd.add_argument("--profile", choices=PROFILES, default="viewer")
+    for cmd in (fetch, install, installed):
+        cmd.add_argument("--allow-drafts", action="store_true")
+        cmd.add_argument("--reserve-bytes", type=int, default=1024**3)
     return p
 
 
@@ -33,12 +56,52 @@ def main(argv=None):
             result = dict(root=str(storage.root), paths=config["paths"])
         elif args.command == "build":
             result = build_release(args.recipe, args.output, args.reserve_bytes, args.allow_drafts)
+        elif args.command == "fetch":
+            result = fetch_release(
+                args.manifest,
+                args.expected_sha256,
+                args.sources,
+                args.destination,
+                PROFILES[args.profile],
+                args.allow_drafts,
+                args.allow_host,
+                args.allow_loopback,
+                args.timeout,
+                args.reserve_bytes,
+            )
+        elif args.command == "import":
+            result = import_release(
+                args.package,
+                args.output,
+                PROFILES[args.profile],
+                args.allow_drafts,
+                args.reserve_bytes,
+                args.expected_sha256,
+            )
+        elif args.command == "verify-install":
+            result = verify_install(args.directory, args.allow_drafts, args.reserve_bytes)
         else:
             result = verify_release(
                 args.directory, allow_drafts=args.allow_drafts, reserve_bytes=args.reserve_bytes
             )
         print(json.dumps(result, indent=2))
         return 0
+    except Paused as exc:
+        print(json.dumps({"paused": str(exc), "retry_after": exc.retry_after}))
+        return 3
+    except KeyboardInterrupt:
+        return 130
+    except ValidationError as exc:
+        print(
+            json.dumps(
+                {
+                    "error": "Invalid release contract",
+                    "validator": exc.validator,
+                    "path": list(exc.absolute_path)[:16],
+                }
+            )
+        )
+        return 2
     except (ValueError, OSError, KeyError) as exc:
         print(json.dumps({"error": type(exc).__name__, "reason": str(exc)}))
         return 2

@@ -1,0 +1,23 @@
+purpose:
+  stands_in_for: A release artifact HTTP source, reusing the repository-owned PDF and Range fixture.
+  unblocks: Pinned release acquisition and relocation without archive, Google account or model traffic.
+assumptions:
+  - id: release-http-client-behavior
+    status: supported
+    claim: The distribution caller retains validated prefixes, rejects inconsistent responses and imports checked content at a different root against local HTTP stand-ins.
+    reason: The real urllib client, subprocess CLI and filesystem state were exercised. The existing Node mock handler was reused; Python stand-ins inject additional failures. These checks do not establish Google Drive service behavior.
+    verification: On 2026-11-17, offline distribution tests covered disconnect and strong-validator Range resume, 200 restart, invalid ranges, HTML, 429 cooldown, credential stripping on a cross-origin redirect, a Drive-shaped media request mapped to loopback, and installed-content corruption. The CLI reached postman/mocks/archive/default.js through the offline runner. No live Drive link was available and no owner-hosted mock search was needed to reuse this repository-owned fixture.
+    source: ingestion/tests/test_distribution_fetch.py; scripts/check_offline.py; postman/mocks/archive/default.js
+    updated_at: '2026-11-17'
+  - id: real-google-drive-publication
+    status: unknown
+    claim: The eventual shared Drive folder permits the selected recipients to retrieve every release artifact with resumable media downloads.
+    reason: File IDs, permissions and a real publication link have not been supplied. The API request shape follows Google's documentation; a local stand-in cannot verify real sharing, quotas or redirects.
+    verification: Only the documented files.get alt=media request and local credential serialization were checked. Validate the actual published folder, sizes and hashes after upload; do not bypass 403 or quota failures.
+    source: https://developers.google.com/workspace/drive/api/guides/manage-downloads; docs/distribution.md
+    updated_at: '2026-11-17'
+fingerprints:
+  - id: distribution-development
+    date: '2026-11-17'
+    commit: fcf682b9 with distribution acquisition changes in the working tree
+    cli: Tests run the repository-owned Node handler through scripts/check_offline.py; no Postman cloud deployment.

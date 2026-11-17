@@ -81,6 +81,18 @@ def validate_release(value, app_version=__version__):
     for item in value["artifacts"]:
         relative_name(item["path"])
         relative_name(item["install_path"])
+        reserved = {
+            "release.json",
+            "install.json",
+            "verification.json",
+            "sha256sums",
+            "readme.md",
+            "sources.json",
+            "current",
+        }
+        for name in (item["path"], item["install_path"]):
+            if name.split("/")[0].startswith(".") or name.casefold() in reserved:
+                raise ValueError("Artifact path collides with package control files")
         # Case-folding also protects case-insensitive macOS/Windows filesystems.
         if (
             item["id"] in ids

@@ -1,0 +1,8 @@
+simulation: explorer-distribution-local
+routing: path
+mocks:
+  - name: archive
+    routeKey: archive
+    origin:
+      - distribution.invalid
+    path: postman/mocks/archive/config.yaml

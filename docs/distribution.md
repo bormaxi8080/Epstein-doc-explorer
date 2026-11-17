@@ -30,7 +30,7 @@ free reserve are checked. Installation must not initialize or fetch implicitly.
 
 1. Release contract and portable workspace: implemented.
 2. Offline builder and semantic verification: implemented; real data folder is prepared after acceptance.
-3. Resumable acquisition/import and Google Drive adapter: next.
+3. Resumable acquisition/import and Drive file adapter: implemented; real shared-folder validation awaits an operator link.
 4. Reproducible Viewer and processor installation: next.
 5. Downloader/OCR operator workflow and portable pilot: next.
 6. Full inventory catalogue integration and release activation: next.
@@ -51,3 +51,34 @@ JSON remains authoritative. Matching snapshot/counts are checked, alongside full
 JSON/parts semantic signatures when both are present. Public viewer databases
 must contain no pending imported documents and match their bundle manifest/TXT.
 All build and verification scratch is on the selected external filesystem.
+
+## Obtain and relocate a release
+
+First obtain the small release.json and its publisher-pinned SHA from the source
+release catalogue. The source map is separate from the immutable data manifest:
+
+```json
+{"format":"explorer-release-sources","version":1,"release_sha256":"PUBLISHER_SHA256",
+ "artifacts":{"ARTIFACT_ID":{"drive_file_id":"UPLOADED_FILE_ID"}}}
+```
+
+A locator may instead use `{"url":"https://your-mirror/path"}`; explicitly admit
+custom hosts with `--allow-host`. The Drive adapter uses the official media API;
+set EXPLORER_DRIVE_TOKEN through your secret mechanism if access requires OAuth.
+Tokens/resource keys are never stored in partial metadata. Cross-origin redirects
+strip authorization. Browser-downloaded files can go directly through offline import.
+No shared-folder URL is available yet; real Drive behavior has not been tested.
+
+```bash
+explorer-data fetch --manifest /external/release.json --expected-sha256 PUBLISHER_SHA256 --sources /external/sources.json --destination /external/empty-package --profile pipeline
+explorer-data import /external/package --output /external/new-install --profile pipeline --expected-sha256 PUBLISHER_SHA256
+explorer-data verify-install /external/new-install
+```
+
+Fetch is the explicit network operation. A pause exits 3 and reports cooldown;
+rerun the same command afterward. There is no hidden retry loop. Strong ETags
+permit validated-prefix Range/If-Range; a 200 fallback restarts cleanly. HTML,
+incorrect ranges and hashes fail closed. Corrupt prefixes are retained separately.
+Partial metadata is under .download-state, outside payload namespaces. Private
+pilot acquisition/import requires --allow-drafts and remains unreviewed.
+Install creates relative data references, not a copied machine-bound work queue.

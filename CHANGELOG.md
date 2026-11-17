@@ -14,6 +14,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Distribution stage 3: pinned HTTPS/Drive source maps, strong-ETag resume,
+  explicit provider cooldowns, credential-safe redirects and offline relocation.
+
 - Distribution stage 2: bounded gzip release builder, standalone database and
   inventory-pair checks, whole/parts semantic verification and private draft gates.
 
