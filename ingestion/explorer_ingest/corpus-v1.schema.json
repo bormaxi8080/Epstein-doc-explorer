@@ -77,7 +77,8 @@
           "enum": [
             "native",
             "fcc_ocr",
-            "reviewed_no_text"
+            "reviewed_no_text",
+            "human_corrected"
           ]
         },
         "text": {

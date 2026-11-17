@@ -6,6 +6,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Fixed
 
+- Allow identified reviewers to submit bounded UTF-8 page corrections, retaining
+  correction hashes/previous versions and invalidating text, analysis and approval.
+
 - Give evidence correction a bounded previous answer and precise invalid-field paths
   in prompt v4. Pin existing plan versions during resume; explicit per-document
   upgrades preserve other successful analyses and approvals.
@@ -13,6 +16,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 - Remove stray patch markers from the corpus workflow guide.
 
 ### Added
+
+- Distribution stage 5: local workflow preparation, portable reviewed-source/OCR
+  exports and offline pilot adoption with preserved receipts and a fresh audit.
 
 - Distribution stage 4: digest-pinned Viewer/processor images, minimal server
   dependencies, hashed Python locks, explicit Compose profiles and read-only doctor.

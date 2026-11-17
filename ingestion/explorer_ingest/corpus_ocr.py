@@ -1,5 +1,6 @@
 """Page transcription, versioned provenance and explicit quality/review routing."""
 
+import hashlib
 import json
 import re
 
@@ -146,7 +147,35 @@ def ocr_page(corpus, doc_id, page, provider, dpi=200, before_call=None, after_ca
     return reference
 
 
-def review_page(corpus, doc_id, page, no_body_text=False, reviewer=None, reason=None):
+def review_page(
+    corpus,
+    doc_id,
+    page,
+    no_body_text=False,
+    reviewer=None,
+    reason=None,
+    corrected_text=None,
+    correction_sha256=None,
+):
+    if (
+        not isinstance(reviewer, str)
+        or not reviewer.strip()
+        or not isinstance(reason, str)
+        or not reason.strip()
+    ):
+        raise ValueError("Page review needs an identified reviewer and nonempty reason")
+    if corrected_text is not None and no_body_text:
+        raise ValueError("Choose corrected text or no-body-text review")
+    if corrected_text is not None:
+        if not isinstance(corrected_text, str) or not reviewer or not reason:
+            raise ValueError("Text correction needs text, reviewer and reason")
+        raw = corrected_text.encode("utf-8")
+        if len(raw) > corpus.storage.limits.max_artifact_bytes // 2:
+            raise ValueError("Correction exceeds the page artifact budget")
+        sha = hashlib.sha256(raw).hexdigest()
+        if correction_sha256 is not None and correction_sha256 != sha:
+            raise ValueError("Correction content/hash mismatch")
+        correction_sha256 = sha
     row = corpus.db.execute(
         "SELECT selected_ref FROM corpus_pages WHERE doc_id=? AND page=?", (doc_id, page)
     ).fetchone()
@@ -159,12 +188,23 @@ def review_page(corpus, doc_id, page, no_body_text=False, reviewer=None, reason=
         "reviewer": reviewer,
         "reason": reason,
         "previous_page_sha256": json.loads(row[0])["sha256"],
+        **(
+            {
+                "text_corrected": True,
+                "correction_sha256": correction_sha256,
+                "original_layout_retained": True,
+            }
+            if corrected_text is not None
+            else {}
+        ),
     }
     return select_page(
         corpus,
         doc_id,
         page,
-        value["text"],
-        "reviewed_no_text" if no_body_text else value["method"],
+        value["text"] if corrected_text is None else corrected_text,
+        "human_corrected"
+        if corrected_text is not None
+        else ("reviewed_no_text" if no_body_text else value["method"]),
         provenance,
     )

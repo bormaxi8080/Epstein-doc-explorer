@@ -102,6 +102,10 @@ def main(argv=None):
         "quarantine", help="Offline: preserve one suspect artifact and permit its retry"
     )
     repair.add_argument("asset_id")
+    importing = commands.add_parser(
+        "import-pilot", help="Offline: adopt published pilot originals and perform a fresh audit"
+    )
+    importing.add_argument("directory", type=Path)
     args = parser.parse_args(argv)
     checkout = Path(__file__).resolve().parents[2]
     destination = args.destination.resolve()
@@ -176,6 +180,12 @@ def main(argv=None):
         os.environ["SQLITE_TMPDIR"] = str(scratch)
         os.environ["TMPDIR"] = str(scratch)
         tempfile.tempdir = str(scratch)
+        if args.command == "import-pilot":
+            from .distribution_pilot import adopt_pilot
+
+            result = adopt_pilot(archive, args.directory, options)
+            print(json.dumps(result, indent=2))
+            return 0 if result.get("pilot", {}).get("verified") else 2
         if args.command == "plan":
             source = args.manifest or args.dump
             if not archive.meta("plan_complete"):

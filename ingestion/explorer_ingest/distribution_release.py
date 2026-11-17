@@ -86,6 +86,13 @@ def verify_installed(root, release, selected):
                 release["visibility"],
                 release["inventory"],
             )
+    for item in by_role.get("pilot-selection", []):
+        from .distribution_pilot import validate_pilot
+
+        validate_pilot(
+            safe_path(root, item["install_path"]).parent,
+            original_root=safe_path(root, item["install_path"]).parent,
+        )
     sources = []
     for role, bundled in (("inventory-full", False), ("inventory-manifest", True)):
         for item in by_role.get(role, []):

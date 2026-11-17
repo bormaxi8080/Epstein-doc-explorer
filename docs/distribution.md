@@ -32,7 +32,7 @@ free reserve are checked. Installation must not initialize or fetch implicitly.
 2. Offline builder and semantic verification: implemented; real data folder is prepared after acceptance.
 3. Resumable acquisition/import and Drive file adapter: implemented; real shared-folder validation awaits an operator link.
 4. Native/container installation and read-only doctor: implemented; acceptance records follow below.
-5. Downloader/OCR operator workflow and portable pilot: next.
+5. Workflow config generation, portable private pilot and fresh-audit adoption: implemented.
 6. Full inventory catalogue integration and release activation: next.
 7. Distribution acceptance tests and real external release: next.
 
@@ -82,3 +82,36 @@ incorrect ranges and hashes fail closed. Corrupt prefixes are retained separatel
 Partial metadata is under .download-state, outside payload namespaces. Private
 pilot acquisition/import requires --allow-drafts and remains unreviewed.
 Install creates relative data references, not a copied machine-bound work queue.
+
+## Prepare a local processing workflow
+
+After importing pipeline data and initializing workspace roles:
+
+```bash
+explorer-data prepare-workflow --workspace /external/workspace.json --installation /external/inventory-install --model claude-3-freecc-no-thinking/open_router/inclusionai/ling-3.2-flash:free --routing-revision your-reviewed-route
+```
+
+This writes archive.json, corpus.json and structured command arguments under
+workspace/configs/RELEASE_ID. It neither initializes processing state nor starts
+network/model work. A different existing configuration is rejected rather than
+silently changing cache identity. Read [the operator workflow](operator-workflow.md).
+
+## Portable private pilot
+
+`explorer-data export-pilot --selection /external/selection/selection.json
+--corpus /external/corpus --output /external/new-portable-pilot` exports checked
+source rows, original receipts, canonical page/structured OCR and validated
+analysis in four bounded JSONL files. Only a frozen pilot (at most 1,000 assets)
+is admitted. Queue leases, local roots, credentials and raw HTTP envelopes are
+not exported. Originals are included by the later release recipe under the same
+relative paths. Export requires an idle corpus writer. The selection header binds
+membership, hashes, page coverage and review state. Pilot groups must be private.
+
+On another machine, create a matching local download plan/layout, then use
+`explorer-download --destination /external/new-archive import-pilot
+/external/installed/pilot` to copy/adopt originals, preserve original receipts and
+perform a new scoped offline audit. No source GET is made. Re-freeze selection
+for the new local archive before starting OCR. Ready Viewer data is reusable
+without inference; fresh processing intentionally creates local jobs instead of
+copying machine-bound queue state. Original receipt times are historical origin
+evidence; the new bundle-import event records the local adoption separately.

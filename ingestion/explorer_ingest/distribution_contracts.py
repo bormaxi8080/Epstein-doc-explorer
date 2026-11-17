@@ -79,6 +79,10 @@ def validate_release(value, app_version=__version__):
         raise ValueError("Release requires a newer application")
     ids, paths, installed = set(), set(), set()
     for item in value["artifacts"]:
+        if value["visibility"] == "public" and (
+            item["group"] == "pilot" or item["role"].startswith("pilot-")
+        ):
+            raise ValueError("Pilot review artifacts require a private release")
         relative_name(item["path"])
         relative_name(item["install_path"])
         reserved = {

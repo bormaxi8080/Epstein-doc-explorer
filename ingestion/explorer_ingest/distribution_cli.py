@@ -10,7 +10,9 @@ from .distribution_demo import demo_bundle
 from .distribution_doctor import diagnose
 from .distribution_fetch import Paused, fetch_release
 from .distribution_install import import_release, verify_install
+from .distribution_pilot import export_pilot
 from .distribution_release import build_release, verify_release
+from .distribution_workflow import prepare_workflow
 
 
 def parser():
@@ -52,6 +54,17 @@ def parser():
     for cmd in (fetch, install, installed):
         cmd.add_argument("--allow-drafts", action="store_true")
         cmd.add_argument("--reserve-bytes", type=int, default=1024**3)
+    prepare = sub.add_parser("prepare-workflow")
+    prepare.add_argument("--workspace", required=True)
+    prepare.add_argument("--installation", required=True)
+    prepare.add_argument("--model", required=True)
+    prepare.add_argument("--routing-revision", required=True)
+    prepare.add_argument("--fcc-url", default="http://127.0.0.1:8082")
+    pilot = sub.add_parser("export-pilot")
+    pilot.add_argument("--selection", required=True)
+    pilot.add_argument("--corpus", required=True)
+    pilot.add_argument("--output", required=True)
+    pilot.add_argument("--reserve-bytes", type=int, default=1024**3)
     return p
 
 
@@ -62,7 +75,13 @@ def main(argv=None):
             result = diagnose(args.workspace, args.require_docker, args.component)
             print(json.dumps(result, indent=2))
             return 0 if result["passed"] else 2
-        if args.command == "demo":
+        if args.command == "prepare-workflow":
+            result = prepare_workflow(
+                args.workspace, args.installation, args.model, args.routing_revision, args.fcc_url
+            )
+        elif args.command == "export-pilot":
+            result = export_pilot(args.selection, args.corpus, args.output, args.reserve_bytes)
+        elif args.command == "demo":
             result = demo_bundle(args.output, args.reserve_bytes)
         elif args.command == "init":
             config, storage = load_workspace(args.workspace)

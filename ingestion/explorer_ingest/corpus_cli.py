@@ -8,6 +8,7 @@ import signal
 import sys
 import time
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from .corpus_analysis import analyze_fragment, approve, assemble_analysis, plan_analysis
 from .corpus_contracts import SUPPORTED_ANALYSIS_PROMPTS, fingerprint
@@ -265,7 +266,9 @@ def parser():
     r.add_argument("page", type=int)
     r.add_argument("--reviewer", required=True)
     r.add_argument("--reason", required=True)
-    r.add_argument("--no-body-text", action="store_true")
+    correction = r.add_mutually_exclusive_group()
+    correction.add_argument("--no-body-text", action="store_true")
+    correction.add_argument("--text-file", type=Path)
     tags = sub.add_parser("init-tags")
     tags.add_argument("--clusters", required=True)
     tag = sub.add_parser("propose-tag")
@@ -363,6 +366,21 @@ def main(argv=None):
             elif args.command == "supersede-job":
                 result = corpus.queue.supersede(args.job_id, args.replacement, args.reason)
             elif args.command == "review-page":
+                corrected_text = correction_sha = None
+                if args.text_file is not None:
+                    if (
+                        args.text_file.is_symlink()
+                        or args.text_file.stat().st_size
+                        > corpus.storage.limits.max_artifact_bytes // 2
+                    ):
+                        raise ValueError("Correction file exceeds the page budget or is a symlink")
+                    limit = corpus.storage.limits.max_artifact_bytes // 2
+                    with args.text_file.open("rb") as incoming:
+                        raw = incoming.read(limit + 1)
+                    if len(raw) > limit:
+                        raise ValueError("Correction file grew beyond its page budget")
+                    correction_sha = hashlib.sha256(raw).hexdigest()
+                    corrected_text = raw.decode("utf-8")
                 result = review_page(
                     corpus,
                     args.doc_id,
@@ -370,6 +388,8 @@ def main(argv=None):
                     args.no_body_text,
                     reviewer=args.reviewer,
                     reason=args.reason,
+                    corrected_text=corrected_text,
+                    correction_sha256=correction_sha,
                 )
             elif args.command == "approve":
                 result = approve(corpus, args.doc_id)
