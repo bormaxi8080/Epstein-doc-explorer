@@ -34,7 +34,7 @@ free reserve are checked. Installation must not initialize or fetch implicitly.
 4. Native/container installation and read-only doctor: implemented; acceptance records follow below.
 5. Workflow config generation, portable private pilot and fresh-audit adoption: implemented.
 6. Full inventory catalogue integration and release activation: implemented.
-7. Distribution acceptance tests and real external release: acceptance in progress.
+7. Distribution acceptance tests and real external releases: implemented; see the dated acceptance report.
 
 Only verified milestones will be marked implemented. Live downloads/inference and
 public publication remain separate explicit commands.
@@ -198,3 +198,15 @@ verifies the published candidate. Raw inputs are deterministically compressed.
 Catalogue construction bulk-loads into unpublished external scratch with indexes
 created afterward; DELETE mode, integrity check, fsync and atomic rename precede
 publication. Interrupted construction never certifies a partial catalogue.
+
+## Prepared data releases
+
+Application 1.2.0 ships a [publisher-pinned release catalogue](../releases/catalog.json)
+and the [public descriptor](../releases/ea-inventory-20261117/release.json).
+See [real acceptance results](distribution-verification-20261117.md) for package
+sizes, checksums, prepared external folders and tested platforms. The release date
+is the packaging date; frozen crawl timestamps remain in the unchanged inventory
+metadata. The Google Drive link/source-map URLs remain null until operator upload.
+Private review data has a separately pinned descriptor hash and is not a public
+mirror. Viewer and pilot profiles can be installed into separate new directories
+from that same private package, each with --allow-drafts and the same expected SHA.

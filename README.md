@@ -10,6 +10,8 @@ PW-010 ingestion pipeline. Current fork version: **1.2.0**.
 - [Standalone archive downloader: independent dump/DB/destination paths](docs/archive-downloader.md)
 - [Ingestion setup, commands, contracts and current limits](docs/ingestion.md)
 - [Self-hosting a reviewed bundle](docs/self-hosting.md)
+- [Prepared data releases and pinned checksums](releases/catalog.json)
+- [Real distribution acceptance](docs/distribution-verification-20261117.md)
 - [Complete-archive capacity and acceptance gates](docs/scale-operations.md)
 - [Codebase Memory MCP setup](docs/codebase-memory-mcp.md)
 - [Project rules](AGENTS.md), [version policy](VERSIONING.md), [changelog](CHANGELOG.md)

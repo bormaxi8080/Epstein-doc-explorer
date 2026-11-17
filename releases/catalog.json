@@ -1,0 +1,36 @@
+{
+  "format": "explorer-data-catalog",
+  "version": 1,
+  "application_version": "1.2.0",
+  "source_commit": "1a901b45fcc3c28d9379166e0af990ed3ddb59b3",
+  "releases": [
+    {
+      "release_id": "ea-inventory-20261117",
+      "visibility": "public",
+      "minimum_app_version": "1.2.0",
+      "release_sha256": "460936f4a3b50945128d6cbc1b6a6b8384a49e26dc6e17abccab34dd7cada8e9",
+      "artifacts": 33,
+      "transport_bytes": 1637599778,
+      "decoded_all_artifacts_bytes": 8475930978,
+      "source_sha256": "7e4791264d49dd256c1eaaf381e5da0764d2bc4d39f7fea56614abce740a47b8",
+      "unique_assets": 1396719,
+      "google_drive_folder_url": null,
+      "sources_url": null,
+      "descriptor_path": "releases/ea-inventory-20261117/release.json"
+    },
+    {
+      "release_id": "ea-pilot-250-private-20261117",
+      "visibility": "private",
+      "minimum_app_version": "1.2.0",
+      "release_sha256": "ec662a33bf4c22885eb8fa5b911274350b5c50b776c655413bbd968fa8f13c1c",
+      "artifacts": 509,
+      "transport_bytes": 821325792,
+      "decoded_all_artifacts_bytes": 3134618571,
+      "source_sha256": "7e4791264d49dd256c1eaaf381e5da0764d2bc4d39f7fea56614abce740a47b8",
+      "unique_assets": 1396719,
+      "google_drive_folder_url": null,
+      "sources_url": null,
+      "descriptor_path": null
+    }
+  ]
+}

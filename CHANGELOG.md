@@ -28,6 +28,10 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Distribution stage 9: verified real public inventory/starter and separate private
+  250-file OCR pilot packages on the external disk, publisher-pinned descriptors,
+  upload checklists and relocation/API/original-hash acceptance evidence.
+
 - Distribution stage 7: explicit complete profile, offline upload/source-map binding,
   full-catalogue container acceptance and reusable public/private external data releases.
 
