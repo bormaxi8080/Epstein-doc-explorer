@@ -1,0 +1,9 @@
+# Copy outside Git and replace paths with existing directories.
+EXPLORER_DATA_DIR=/path/to/external/explorer/releases
+EXPLORER_WORKSPACE=/path/to/external/explorer
+EXPLORER_PORT=3001
+EXPLORER_DOMAIN=your.domain
+ALLOWED_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
+# For --profile https, include https://your.domain in ALLOWED_ORIGINS.
+# Set PROCESSOR_UID/GID to the owner of the writable workspace on Linux.
+# Supply FCC_API_KEY through your secret environment, not this public template.

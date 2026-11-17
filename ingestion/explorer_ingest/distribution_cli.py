@@ -6,6 +6,8 @@ import json
 from jsonschema import ValidationError
 
 from .distribution_contracts import PROFILES, load_workspace
+from .distribution_demo import demo_bundle
+from .distribution_doctor import diagnose
 from .distribution_fetch import Paused, fetch_release
 from .distribution_install import import_release, verify_install
 from .distribution_release import build_release, verify_release
@@ -14,6 +16,13 @@ from .distribution_release import build_release, verify_release
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
+    doctor = sub.add_parser("doctor")
+    doctor.add_argument("--workspace")
+    doctor.add_argument("--require-docker", action="store_true")
+    doctor.add_argument("--component", choices=("all", "viewer", "processor"), default="all")
+    demo = sub.add_parser("demo")
+    demo.add_argument("--output", required=True)
+    demo.add_argument("--reserve-bytes", type=int, default=1024**3)
     init = sub.add_parser("init")
     init.add_argument("--workspace", required=True)
     build = sub.add_parser("build")
@@ -49,7 +58,13 @@ def parser():
 def main(argv=None):
     args = parser().parse_args(argv)
     try:
-        if args.command == "init":
+        if args.command == "doctor":
+            result = diagnose(args.workspace, args.require_docker, args.component)
+            print(json.dumps(result, indent=2))
+            return 0 if result["passed"] else 2
+        if args.command == "demo":
+            result = demo_bundle(args.output, args.reserve_bytes)
+        elif args.command == "init":
             config, storage = load_workspace(args.workspace)
             for relative in config["paths"].values():
                 storage.mkdir(relative)

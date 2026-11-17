@@ -3,6 +3,9 @@
 This fork preserves the upstream Explorer and adds an independent, evidence-aware
 PW-010 ingestion pipeline. Current fork version: **1.1.0**.
 
+- [Portable data releases and distribution](docs/distribution.md)
+- [Corpus workflow and review](docs/corpus-pipeline.md)
+- [Completed private 250-file pilot](docs/corpus-pilot-2026-11-17.md)
 - [Offline hardening and development](docs/development-hardening.md)
 - [Standalone archive downloader: independent dump/DB/destination paths](docs/archive-downloader.md)
 - [Ingestion setup, commands, contracts and current limits](docs/ingestion.md)
@@ -11,9 +14,13 @@ PW-010 ingestion pipeline. Current fork version: **1.1.0**.
 - [Project rules](AGENTS.md), [version policy](VERSIONING.md), [changelog](CHANGELOG.md)
 
 The existing corpus remains the upstream baseline. Downloaded originals, model
-responses and ingestion state live outside this checkout. No live downloads,
-model requests or deployment happen during installation. The new pipeline is
-preliminary; OCR, evidence UI and large-corpus API work remain planned.
+responses and ingestion state live outside this checkout. Installation is explicit;
+PDF/image/text OCR, canonical text, evidence analysis, compatible export and the
+catalogue/page UI are implemented. The 250-file private pilot has complete
+OCR/text/analysis with quality review pending. Full-archive and media-specific
+acceptance gates are documented separately. Ready data belongs in external
+versioned releases. The upstream reference below is retained; use the fork guides
+above for the current supported workflow.
 
 ---
 

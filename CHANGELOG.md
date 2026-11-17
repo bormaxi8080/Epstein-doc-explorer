@@ -14,6 +14,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Distribution stage 4: digest-pinned Viewer/processor images, minimal server
+  dependencies, hashed Python locks, explicit Compose profiles and read-only doctor.
+
 - Distribution stage 3: pinned HTTPS/Drive source maps, strong-ETag resume,
   explicit provider cooldowns, credential-safe redirects and offline relocation.
 

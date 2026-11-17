@@ -6,6 +6,9 @@ on:
       - 'ingestion/**'
       - 'scripts/**'
       - 'postman/**'
+      - 'network-ui/**'
+      - 'deploy/**'
+      - 'requirements/**'
       - 'pyproject.toml'
       - 'api_server.ts'
       - 'tsconfig*.json'
@@ -16,6 +19,9 @@ on:
       - 'ingestion/**'
       - 'scripts/**'
       - 'postman/**'
+      - 'network-ui/**'
+      - 'deploy/**'
+      - 'requirements/**'
       - 'pyproject.toml'
       - 'api_server.ts'
       - 'tsconfig*.json'
@@ -108,3 +114,35 @@ jobs:
         with:
           name: synthetic-scale
           path: ${{ runner.temp }}/scale.json
+
+  distribution-containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /ingestion/
+            /scripts/
+            /deploy/
+            /requirements/
+            /network-ui/
+            /api_server.ts
+            /pyproject.toml
+            /.dockerignore
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --require-hashes -r requirements/build.lock -r requirements/processor.lock
+      - run: python -m pip install --no-index --no-deps --no-build-isolation -e .
+      - run: mkdir -p '${{ runner.temp }}/distribution'
+      - run: python scripts/check_containers.py --scratch '${{ runner.temp }}/distribution' --system-reserve-bytes 5368709120
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: distribution-container-verification
+          path: |
+            ${{ runner.temp }}/distribution/**/verification.json
+            ${{ runner.temp }}/distribution/**/containers.log

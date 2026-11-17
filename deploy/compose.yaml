@@ -1,29 +1,54 @@
+# Resolved 2026-11-17; update reviewed digests explicitly.
+x-node-image: &node-image node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee
+x-python-image: &python-image python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df
 services:
   explorer:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        NODE_IMAGE: *node-image
     restart: unless-stopped
     environment:
-      ALLOWED_ORIGINS: https://${EXPLORER_DOMAIN:?Set EXPLORER_DOMAIN}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001}
+      DB_READONLY: "true"
     volumes:
-      - ${EXPLORER_DATA_DIR:?Set EXPLORER_DATA_DIR}:/data:ro
-    expose:
-      - '3001'
+      - type: bind
+        source: ${EXPLORER_DATA_DIR:?Set an existing release directory}
+        target: /data
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - '127.0.0.1:${EXPLORER_PORT:-3001}:3001'
   caddy:
-    image: caddy:2
+    image: caddy:2@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+    profiles: [https]
     restart: unless-stopped
     environment:
-      EXPLORER_DOMAIN: ${EXPLORER_DOMAIN:?Set EXPLORER_DOMAIN}
-    ports:
-      - '80:80'
-      - '443:443'
+      EXPLORER_DOMAIN: ${EXPLORER_DOMAIN:-localhost}
+    ports: ['80:80', '443:443']
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on:
-      - explorer
+    depends_on: [explorer]
+  processor:
+    profiles: [pipeline]
+    build:
+      context: ..
+      dockerfile: deploy/processor.Dockerfile
+      args:
+        PYTHON_IMAGE: *python-image
+    user: '${PROCESSOR_UID:-1000}:${PROCESSOR_GID:-1000}'
+    volumes:
+      - type: bind
+        source: ${EXPLORER_WORKSPACE:-/nonexistent-explorer-workspace}
+        target: /workspace
+        bind:
+          create_host_path: false
+    environment:
+      FCC_API_KEY: ${FCC_API_KEY:-}
 volumes:
   caddy_data:
   caddy_config:

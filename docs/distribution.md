@@ -31,7 +31,7 @@ free reserve are checked. Installation must not initialize or fetch implicitly.
 1. Release contract and portable workspace: implemented.
 2. Offline builder and semantic verification: implemented; real data folder is prepared after acceptance.
 3. Resumable acquisition/import and Drive file adapter: implemented; real shared-folder validation awaits an operator link.
-4. Reproducible Viewer and processor installation: next.
+4. Native/container installation and read-only doctor: implemented; acceptance records follow below.
 5. Downloader/OCR operator workflow and portable pilot: next.
 6. Full inventory catalogue integration and release activation: next.
 7. Distribution acceptance tests and real external release: next.
