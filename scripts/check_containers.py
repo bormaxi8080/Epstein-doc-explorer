@@ -13,7 +13,9 @@ from pathlib import Path
 
 from explorer_ingest.distribution_contracts import ExternalDirectory
 from explorer_ingest.distribution_demo import demo_bundle
+from explorer_ingest.inventory_catalog import build_catalog
 from explorer_ingest.state import atomic_json, digest_file
+from explorer_ingest.synthetic_archive import generate_inventory
 
 
 def main():
@@ -85,6 +87,9 @@ def main():
         data = root / "data"
         data.mkdir()
         demo_bundle(data / "demo", reserve_bytes=0)
+        inventory = root / "synthetic-inventory.json"
+        generate_inventory(inventory, 3)
+        build_catalog(inventory, data / "demo/inventory.sqlite3", reserve_bytes=0)
         (data / "current").symlink_to("demo", target_is_directory=True)
         before = digest_file(data / "demo/document_analysis.db")
         run(
@@ -124,6 +129,9 @@ def main():
         catalogue = json.loads(get("/api/documents?limit=10"))
         assert stats["totalDocuments"]["count"] == len(catalogue["documents"]) == 1
         assert "SYNTHETIC" in catalogue["documents"][0]["one_sentence_summary"]
+        dataset = json.loads(get("/api/dataset"))
+        assert dataset["synthetic"] and dataset["catalogue"]["unique_files_count"] == 3
+        assert len(json.loads(get("/api/archive/assets?limit=1"))["assets"]) == 1
         html = get("/")
         assert b"<html" in html.lower() and b"/assets/" in html
         assert before == digest_file(data / "demo/document_analysis.db")

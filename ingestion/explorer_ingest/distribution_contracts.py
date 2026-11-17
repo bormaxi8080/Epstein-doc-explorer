@@ -21,6 +21,7 @@ GROUPS = (
     "catalogue",
 )
 PROFILES = {
+    "complete": ("inventory-parts", "inventory-db", "catalogue", "baseline", "viewer"),
     "viewer": ("viewer", "catalogue"),
     "catalogue": ("catalogue",),
     "pipeline": ("inventory-parts", "inventory-db", "catalogue"),

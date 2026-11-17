@@ -7,6 +7,7 @@ from pathlib import Path
 
 import test_archive as fixtures
 from explorer_ingest.distribution_release import build_release, verify_release
+from explorer_ingest.inventory_catalog import build_catalog
 from explorer_ingest.inventory_parts import Inventory, split_inventory
 from explorer_ingest.state import digest_file
 
@@ -90,6 +91,39 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.build()
         self.assertFalse((self.root / "package").exists())
+
+    def test_catalogue_signature_must_match_the_actual_inventory(self):
+        catalog = self.root / "catalog.sqlite3"
+        build_catalog(self.source, catalog, reserve_bytes=0)
+        self.add("catalog", catalog, "catalogue", "catalog-db", "viewer/inventory.sqlite3")
+        self.build()
+        with sqlite3.connect(catalog) as db:
+            signature = json.loads(
+                db.execute("SELECT value FROM meta WHERE key='signature'").fetchone()[0]
+            )
+            signature["records_sha256"]["asset"] = "e" * 64
+            db.execute("UPDATE meta SET value=? WHERE key='signature'", (json.dumps(signature),))
+        with self.assertRaisesRegex(ValueError, "semantic signatures"):
+            self.build("wrong-index")
+        self.assertFalse((self.root / "wrong-index").exists())
+
+    def test_existing_gzip_is_verified_and_reused_without_recompression(self):
+        zipped = self.root / "frozen.json.gz"
+        with gzip.open(zipped, "wb") as stream:
+            stream.write(self.source.read_bytes())
+        self.recipe["artifacts"][0].update(
+            source=str(zipped),
+            source_encoding="gzip",
+            expected_content_bytes=self.source.stat().st_size,
+            expected_content_sha256=digest_file(self.source),
+            reuse_compressed=True,
+        )
+        self.build()
+        self.assertEqual((self.root / "package/files/full.gz").read_bytes(), zipped.read_bytes())
+        self.recipe["artifacts"][0]["expected_content_bytes"] = 1
+        with self.assertRaises(ValueError):
+            self.build("bad-reuse")
+        self.assertFalse((self.root / "bad-reuse").exists())
 
     def test_private_release_requires_opt_in(self):
         self.recipe["visibility"] = "private"

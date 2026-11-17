@@ -1,7 +1,7 @@
 # Epstein Document Explorer — DOJ ingestion fork
 
 This fork preserves the upstream Explorer and adds an independent, evidence-aware
-PW-010 ingestion pipeline. Current fork version: **1.1.0**.
+PW-010 ingestion pipeline. Current fork version: **1.2.0**.
 
 - [Portable data releases and distribution](docs/distribution.md)
 - [Corpus workflow and review](docs/corpus-pipeline.md)
@@ -10,6 +10,7 @@ PW-010 ingestion pipeline. Current fork version: **1.1.0**.
 - [Standalone archive downloader: independent dump/DB/destination paths](docs/archive-downloader.md)
 - [Ingestion setup, commands, contracts and current limits](docs/ingestion.md)
 - [Self-hosting a reviewed bundle](docs/self-hosting.md)
+- [Complete-archive capacity and acceptance gates](docs/scale-operations.md)
 - [Codebase Memory MCP setup](docs/codebase-memory-mcp.md)
 - [Project rules](AGENTS.md), [version policy](VERSIONING.md), [changelog](CHANGELOG.md)
 

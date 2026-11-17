@@ -27,7 +27,7 @@ export function DocumentCatalogue({onClose,initialDocument}:{onClose:()=>void;in
     read(`/document/${encodeURIComponent(selected.doc_id)}/evidence?after=${evidenceAfter}`,c.signal)
       .then(r=>{setEvidence(r.evidence);setEvidenceNext(r.next);}).catch(e=>{if(e.name!=='AbortError')setError(e.message);});return()=>c.abort();
   },[selected,evidenceAfter]);
-  return <div className="fixed inset-0 z-50 bg-gray-900 text-white overflow-auto p-4" role="dialog" aria-modal="true" aria-label="Document catalogue">
+  return <div className="fixed inset-0 z-[60] bg-gray-900 text-white overflow-auto p-4" role="dialog" aria-modal="true" aria-label="Document catalogue">
     <button className="float-right p-2 bg-gray-700 rounded" onClick={onClose}>Close catalogue</button><h1 className="text-2xl mb-4">Document catalogue</h1>
     <p className="mb-4">Includes documents without graph relationships. OCR and analysis can require review.</p>
     <form onSubmit={e=>{e.preventDefault();setAfter('');setSubmitted(q);}}><input className="bg-gray-700 p-2" aria-label="Search document text" value={q} onChange={e=>setQ(e.target.value)}/><button className="p-2" type="submit">Search text</button></form>

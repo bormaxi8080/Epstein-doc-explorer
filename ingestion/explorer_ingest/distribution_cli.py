@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import sqlite3
 
 from jsonschema import ValidationError
 
@@ -13,6 +14,7 @@ from .distribution_fetch import Paused, fetch_release
 from .distribution_install import import_release, verify_install
 from .distribution_pilot import export_pilot
 from .distribution_release import build_release, verify_release
+from .distribution_sources import write_sources
 from .distribution_workflow import prepare_workflow
 from .inventory_catalog import build_catalog
 
@@ -77,6 +79,11 @@ def parser():
     active.add_argument("--workspace", required=True)
     active.add_argument("--installation", required=True)
     active.add_argument("--allow-drafts", action="store_true")
+    sources = sub.add_parser("source-map")
+    sources.add_argument("--manifest", required=True)
+    sources.add_argument("--output", required=True)
+    sources.add_argument("--mapping")
+    sources.add_argument("--allow-host", action="append", default=[])
     return p
 
 
@@ -87,7 +94,9 @@ def main(argv=None):
             result = diagnose(args.workspace, args.require_docker, args.component)
             print(json.dumps(result, indent=2))
             return 0 if result["passed"] else 2
-        if args.command == "build-catalog":
+        if args.command == "source-map":
+            result = write_sources(args.manifest, args.output, args.mapping, args.allow_host)
+        elif args.command == "build-catalog":
             result = build_catalog(
                 args.manifest or args.dump, args.output, bool(args.manifest), args.reserve_bytes
             )
@@ -150,6 +159,16 @@ def main(argv=None):
                     "error": "Invalid release contract",
                     "validator": exc.validator,
                     "path": list(exc.absolute_path)[:16],
+                }
+            )
+        )
+        return 2
+    except sqlite3.Error:
+        print(
+            json.dumps(
+                {
+                    "error": "DatabaseOperationFailed",
+                    "reason": "Inspect storage, input integrity and logs; no release was certified",
                 }
             )
         )

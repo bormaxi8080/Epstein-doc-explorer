@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "epstein-explorer-ingestion"
-version = "1.1.0"
+version = "1.2.0"
 description = "Provenance-preserving DOJ ingestion for Epstein Document Explorer"
 requires-python = ">=3.10"
 dependencies = ["ijson>=3.3,<4", "jsonschema>=4.23,<5", "pypdf>=5,<7", "certifi>=2024.8.30", "pypdfium2==5.15.2", "Pillow==12.3.0"]

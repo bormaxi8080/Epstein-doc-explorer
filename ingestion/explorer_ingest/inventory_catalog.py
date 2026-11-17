@@ -22,6 +22,7 @@ def catalog_database(stage):
             raise ValueError("SQLite did not accept external temporary storage")
         yield db
     finally:
+        db.rollback()
         db.execute(
             "PRAGMA temp_store_directory='"
             + (previous[0] if previous else "").replace("'", "''")
@@ -39,15 +40,18 @@ def build_catalog(source, output, manifest=False, reserve_bytes=1024**3):
     stage = storage.mkdir(".catalog-" + uuid.uuid4().hex)
     try:
         with catalog_database(stage) as db:
-            db.execute("PRAGMA journal_mode=DELETE")
-            db.execute("PRAGMA cache_size=-16384")
+            # This database is unpublished scratch; a crash discards it completely.
+            # Final fsync/DELETE mode precede the atomic publication below.
+            db.execute("PRAGMA journal_mode=OFF")
+            db.execute("PRAGMA synchronous=OFF")
+            db.execute("PRAGMA cache_size=-65536")
             db.execute("PRAGMA temp_store=FILE")
             db.set_progress_handler(lambda: storage.check() or 0, 100000)
             db.executescript("""
               CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-              CREATE TABLE assets(id TEXT UNIQUE NOT NULL,url TEXT NOT NULL,name TEXT NOT NULL,
+              CREATE TABLE assets(id TEXT NOT NULL,url TEXT NOT NULL,name TEXT NOT NULL,
                 kind TEXT NOT NULL,bytes INTEGER,payload TEXT NOT NULL);
-              CREATE TABLE nodes(seq INTEGER PRIMARY KEY,parent INTEGER,node_id TEXT UNIQUE NOT NULL,
+              CREATE TABLE nodes(seq INTEGER PRIMARY KEY,parent INTEGER,node_id TEXT NOT NULL,
                 kind TEXT NOT NULL,name TEXT NOT NULL,asset_id TEXT,payload TEXT NOT NULL);
               CREATE TABLE records(kind TEXT NOT NULL,payload TEXT NOT NULL);
             """)
@@ -103,6 +107,8 @@ def build_catalog(source, output, manifest=False, reserve_bytes=1024**3):
 
             signature = source.scan(sink=accept, check=storage.check)
             db.executescript("""
+              CREATE UNIQUE INDEX assets_id ON assets(id);
+              CREATE UNIQUE INDEX nodes_id ON nodes(node_id);
               CREATE INDEX nodes_parent_seq ON nodes(parent,seq);
               CREATE INDEX nodes_asset ON nodes(asset_id);
               CREATE INDEX assets_kind ON assets(kind);
@@ -131,6 +137,7 @@ def build_catalog(source, output, manifest=False, reserve_bytes=1024**3):
                 "INSERT INTO meta VALUES (?,?)", ((k, json.dumps(v)) for k, v in meta.items())
             )
             db.commit()
+            db.execute("PRAGMA journal_mode=DELETE")
             if db.execute("PRAGMA quick_check").fetchone() != ("ok",):
                 raise ValueError("Catalogue integrity check failed")
         storage.check()

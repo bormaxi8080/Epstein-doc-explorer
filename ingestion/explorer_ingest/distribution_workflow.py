@@ -24,7 +24,14 @@ def prepare_workflow(
         a["role"]: a
         for a in release["artifacts"]
         if a["id"] in included
-        and a["role"] in ("inventory-manifest", "inventory-full", "inventory-db")
+        and a["role"]
+        in (
+            "inventory-manifest",
+            "inventory-full",
+            "inventory-db",
+            "baseline-db",
+            "viewer-clusters",
+        )
     }
     source = items.get("inventory-manifest") or items.get("inventory-full")
     if not source:
@@ -100,6 +107,22 @@ def prepare_workflow(
         ]
         commands[scope + "_import"] = process + ["import", str(selection / "selection.json")]
     commands["plan_corpus"] = process + ["plan"]
+    if items.get("baseline-db") and items.get("viewer-clusters"):
+        export = [
+            "--clusters",
+            str(safe_path(installation, items["viewer-clusters"]["install_path"])),
+            "--base-db",
+            str(safe_path(installation, items["baseline-db"]["install_path"])),
+        ]
+        commands["export_public"] = (
+            process + ["export", str(roots["releases"] / "processed-public-CHOOSE-NEW-ID")] + export
+        )
+        commands["export_private"] = (
+            process
+            + ["export", str(roots["releases"] / "processed-private-CHOOSE-NEW-ID")]
+            + export
+            + ["--include-unreviewed"]
+        )
     for name, value in settings.items():
         atomic_json(configs / name, value)
     atomic_json(configs / "commands.json", commands)

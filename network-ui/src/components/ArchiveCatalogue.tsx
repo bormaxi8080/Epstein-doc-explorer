@@ -26,7 +26,7 @@ export function ArchiveCatalogue({onClose,onDocument}:{onClose:()=>void;onDocume
   },[search,parent,after]);
   useEffect(()=>{setDetail(null);},[search,parent]);
   async function open(id:string) {setError('');try{setDetail(await read('/archive/asset/'+encodeURIComponent(id)));}catch(e){setError((e as Error).message);}}
-  return <div role="dialog" aria-modal="true" aria-label="Full archive catalogue" className="fixed inset-0 z-50 bg-gray-900 text-white overflow-auto p-4">
+  return <div role="dialog" aria-modal="true" aria-label="Full archive catalogue" className="fixed inset-0 z-[60] bg-gray-900 text-white overflow-auto p-4">
     <button className="float-right rounded bg-gray-700 p-2" onClick={onClose}>Close archive</button><h1 className="text-2xl mb-3">Full archive catalogue</h1>
     <p className="mb-3">Browse every source file. Text and analysis become available as verified processing is published.</p>
     <form className="flex gap-2 mb-4" onSubmit={e=>{e.preventDefault();setSearch(q.trim());setAfter(0);}}><input className="bg-gray-700 p-2 min-w-0" aria-label="Search archive filenames" placeholder="Search filenames" value={q} onChange={e=>setQ(e.target.value)}/><button>Search</button><button type="button" onClick={()=>{setSearch('');setQ('');setAfter(0);}}>Browse folders</button></form>

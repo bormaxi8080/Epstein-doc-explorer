@@ -7,7 +7,7 @@ unchanged; no Git LFS pull is needed when using an external release.
 
 ## Native setup (macOS/Linux)
 
-Use Python 3.12 and Node 22.12 or newer. Python 3.10 remains supported by the library
+Use Python 3.12 and Node 22.12 or newer. See [scale operations](scale-operations.md) before whole-archive processing. Python 3.10 remains supported by the library
 for bounded documents; 3.11+ is required for streamed large SQLite text. Set an
 existing external root in examples/workspace.json, copied outside Git.
 

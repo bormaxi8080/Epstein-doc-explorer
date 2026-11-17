@@ -4,7 +4,15 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ## Unreleased
 
+## 1.2.0 — 2026-11-17
+
 ### Fixed
+
+- Escape document-derived graph tooltip markup and keep catalogue dialogs above
+  mobile navigation; verify folder/search behavior in desktop and mobile Chrome.
+
+- Bulk-load catalogue rows before building unique/FTS indexes, keep construction
+  journals in unpublished external scratch, and verify/reuse frozen gzip transports.
 
 - Allow identified reviewers to submit bounded UTF-8 page corrections, retaining
   correction hashes/previous versions and invalidating text, analysis and approval.
@@ -16,6 +24,9 @@ Changes to this fork are recorded here; upstream history remains in Git.
 - Remove stray patch markers from the corpus workflow guide.
 
 ### Added
+
+- Distribution stage 7: explicit complete profile, offline upload/source-map binding,
+  full-catalogue container acceptance and reusable public/private external data releases.
 
 - Distribution stage 6: complete inventory SQLite/FTS catalogue, bounded folder and
   source search, explicit text/review coverage, source-to-member document mapping,

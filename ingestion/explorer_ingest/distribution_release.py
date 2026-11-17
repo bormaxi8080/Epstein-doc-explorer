@@ -122,6 +122,12 @@ def verify_installed(root, release, selected):
             if signature["counts"].get("asset", 0) != release["inventory"]["unique_assets"]:
                 raise ValueError("Inventory asset coverage mismatch")
             sources.append(signature)
+    if sources:
+        for item in by_role.get("catalog-db", []):
+            with closing(database(safe_path(root, item["install_path"]))) as db:
+                row = db.execute("SELECT value FROM meta WHERE key='signature'").fetchone()
+                if not row or json.loads(row[0]) != sources[0]:
+                    raise ValueError("Catalogue and inventory semantic signatures disagree")
     if sources and any(s != sources[0] for s in sources[1:]):
         raise ValueError("Whole and partitioned inventories are not semantically equivalent")
     for item in by_role.get("viewer-db", []):
@@ -233,7 +239,29 @@ def build_release(recipe_path, output, reserve_bytes=1024**3, allow_drafts=False
                 raise ValueError("Compressed input needs its expected decoded size")
             storage.check(expected)
             with decoded(source, source_encoding) as incoming, target.open("xb") as outgoing:
-                if item["encoding"] == "gzip":
+                reuse = request.get("reuse_compressed", False)
+                if (
+                    type(reuse) is not bool
+                    or reuse
+                    and (source_encoding != "gzip" or item["encoding"] != "gzip")
+                ):
+                    raise ValueError("Compressed transport reuse requires gzip input/output")
+                if reuse:
+
+                    class Discard:
+                        def write(self, data):
+                            return len(data)
+
+                    sha = transfer(
+                        incoming,
+                        Discard(),
+                        storage,
+                        expected,
+                        request.get("expected_content_sha256"),
+                    )
+                    with source.open("rb") as encoded:
+                        transfer(encoded, outgoing, storage, before.st_size)
+                elif item["encoding"] == "gzip":
                     with gzip.GzipFile(filename="", fileobj=outgoing, mode="wb", mtime=0) as zipped:
                         sha = transfer(
                             incoming,

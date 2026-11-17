@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
 import * as d3 from 'd3';
+import { escapeHtml } from '../html';
 import type { Relationship, GraphNode, GraphLink } from '../types';
 import { fetchActorCount } from '../api';
 
@@ -392,7 +393,7 @@ export default function NetworkGraph({
         // Show loading state
         tooltip
           .style('visibility', 'visible')
-          .html(`<strong>${d.name}</strong><br/>${d.val} connections<br/>(loading total...)`);
+          .html(`<strong>${escapeHtml(d.name)}</strong><br/>${d.val} connections<br/>(loading total...)`);
 
         // Fetch on-demand
         try {
@@ -402,16 +403,16 @@ export default function NetworkGraph({
 
           // Update tooltip with fetched count
           tooltip
-            .html(`<strong>${d.name}</strong><br/>${d.val} connections<br/>(${totalCount} total)`);
+            .html(`<strong>${escapeHtml(d.name)}</strong><br/>${d.val} connections<br/>(${totalCount} total)`);
         } catch (error) {
           console.error('Error fetching actor count:', error);
           tooltip
-            .html(`<strong>${d.name}</strong><br/>${d.val} connections`);
+            .html(`<strong>${escapeHtml(d.name)}</strong><br/>${d.val} connections`);
         }
       } else {
         tooltip
           .style('visibility', 'visible')
-          .html(`<strong>${d.name}</strong><br/>${d.val} connections<br/>(${totalCount} total)`);
+          .html(`<strong>${escapeHtml(d.name)}</strong><br/>${d.val} connections<br/>(${totalCount} total)`);
       }
     })
     .on('mousemove', (event) => {
@@ -427,10 +428,10 @@ export default function NetworkGraph({
       const linkData = d as GraphLink & { count?: number };
       const count = linkData.count || 1;
       let html = count > 1
-        ? `<strong>${count} relationships</strong><br/>${linkData.action}`
-        : `<strong>${linkData.action}</strong>`;
-      if (linkData.location) html += `<br/>📍 ${linkData.location}`;
-      if (linkData.timestamp) html += `<br/>📅 ${linkData.timestamp}`;
+        ? `<strong>${count} relationships</strong><br/>${escapeHtml(linkData.action)}`
+        : `<strong>${escapeHtml(linkData.action)}</strong>`;
+      if (linkData.location) html += `<br/>📍 ${escapeHtml(linkData.location)}`;
+      if (linkData.timestamp) html += `<br/>📅 ${escapeHtml(linkData.timestamp)}`;
       tooltip
         .style('visibility', 'visible')
         .html(html);

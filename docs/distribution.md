@@ -29,12 +29,12 @@ free reserve are checked. Installation must not initialize or fetch implicitly.
 ## Implementation milestones
 
 1. Release contract and portable workspace: implemented.
-2. Offline builder and semantic verification: implemented; real data folder is prepared after acceptance.
+2. Offline builder and semantic verification: implemented.
 3. Resumable acquisition/import and Drive file adapter: implemented; real shared-folder validation awaits an operator link.
 4. Native/container installation and read-only doctor: implemented; acceptance records follow below.
 5. Workflow config generation, portable private pilot and fresh-audit adoption: implemented.
 6. Full inventory catalogue integration and release activation: implemented.
-7. Distribution acceptance tests and real external release: next.
+7. Distribution acceptance tests and real external release: acceptance in progress.
 
 Only verified milestones will be marked implemented. Live downloads/inference and
 public publication remain separate explicit commands.
@@ -64,7 +64,9 @@ release catalogue. The source map is separate from the immutable data manifest:
 
 A locator may instead use `{"url":"https://your-mirror/path"}`; explicitly admit
 custom hosts with `--allow-host`. The Drive adapter uses the official media API;
-set EXPLORER_DRIVE_TOKEN through your secret mechanism if access requires OAuth.
+use EXPLORER_DRIVE_TOKEN through your secret mechanism with a valid OAuth token
+and download permissions. Public browser sharing alone is not the API credential
+setup. See the [official download contract](https://developers.google.com/workspace/drive/api/guides/manage-downloads).
 Tokens/resource keys are never stored in partial metadata. Cross-origin redirects
 strip authorization. Browser-downloaded files can go directly through offline import.
 No shared-folder URL is available yet; real Drive behavior has not been tested.
@@ -151,3 +153,48 @@ previous installation. Existing directories/escaping pointers are rejected.
 Private installation/activation requires --allow-drafts; do not expose a private
 pilot as the public default. Original source downloads remain under the downloader
 root; the catalogue provides the official source URL without initiating a download.
+
+## Google Drive handoff
+
+The prepared public folder is self-contained: release.json, SHA256SUMS, verification,
+README and each compressed artifact in its relative transfer path. Upload that folder
+as a unit. The separate private-review folder contains unapproved pilot content;
+keep it separate from the public folder. Working queues, caches, cookies and provider
+credentials are excluded. Frozen source SQLite is read-only producer evidence,
+not a downloader ledger. Private source receipts preserve origin provenance.
+
+Generate an offline upload checklist with:
+
+```bash
+explorer-data source-map --manifest /external/package/release.json --output /external/upload-input.json
+```
+
+After uploading, replace each null artifact locator with its drive_file_id (and
+resource_key when needed), or an HTTPS mirror URL. IDs map to upload_paths, so
+filenames do not have to be guessed. Keep the pinned release SHA unchanged. Then:
+
+```bash
+explorer-data source-map --manifest /external/package/release.json --mapping /external/upload-input.json --output /external/sources.json
+```
+
+This validates every entry and emits the fetch-compatible map without network
+requests. Share release.json, the independent pinned SHA and sources.json with
+recipients. A browser download followed by offline import is also supported.
+Drive quotas/access prompts are provider behavior: no real folder is claimed
+validated until the operator supplies an uploaded link and an actual retrieval
+passes hash verification. Uploading or source-map generation does not publish code.
+
+Use --profile complete to install parts, paired producer SQLite, full catalogue,
+pristine baseline and ready public Viewer together. prepare-workflow then includes
+explicit new-bundle export commands; choose a new output ID before each export.
+The full original JSON is optional via --profile inventory-full, preserving its
+exact decoded bytes. Profiles may be fetched sequentially into the same pinned
+package. Install each profile to a new directory; installed profiles are immutable.
+
+Frozen gzip recipe inputs may set reuse_compressed=true with gzip input/output
+and an explicit expected decoded size/hash. The builder validates decoded bytes,
+retains the exact existing transport, checks source identity and independently
+verifies the published candidate. Raw inputs are deterministically compressed.
+Catalogue construction bulk-loads into unpublished external scratch with indexes
+created afterward; DELETE mode, integrity check, fsync and atomic rename precede
+publication. Interrupted construction never certifies a partial catalogue.
