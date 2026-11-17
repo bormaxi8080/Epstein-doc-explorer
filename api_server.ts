@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import express from 'express';
+import { registerArchive } from './api_archive.js';
 import cors from 'cors';
 import Database from 'better-sqlite3';
 import fs from 'fs';
@@ -24,11 +25,6 @@ app.use(cors({
 
     // Allow localhost origins for development
     if (ALLOWED_ORIGINS.includes(origin)) {
-      return callback(null, true);
-    }
-
-    // Allow Render deployment domains (*.onrender.com)
-    if (origin && (origin.includes('.onrender.com') || origin.endsWith('onrender.com'))) {
       return callback(null, true);
     }
 
@@ -101,6 +97,8 @@ try {
   console.error('Failed to initialize database:', error);
   process.exit(1);
 }
+
+const closeArchive = registerArchive(app, db, DB_PATH);
 
 // New bundles serve cluster metadata from SQLite without loading every tag.
 let tagClusters: any[] = [];
@@ -483,6 +481,7 @@ const gracefulShutdown = (signal: string) => {
   server.close(() => {
     console.log('HTTP server closed');
     try {
+      closeArchive();
       db.close();
       console.log('Database connection closed');
     } catch (error) {

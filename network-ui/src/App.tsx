@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { ArchiveCatalogue, DatasetBadge } from './components/ArchiveCatalogue';
+import type { CatalogueDocument } from './components/DocumentCatalogue';
 import { DocumentCatalogue } from './components/DocumentCatalogue';
 import NetworkGraph from './components/NetworkGraph';
 import Sidebar from './components/Sidebar';
@@ -9,6 +11,8 @@ import { fetchStats, fetchRelationships, fetchActorRelationships, fetchTagCluste
 import type { Stats, Relationship, TagCluster } from './types';
 
 function App() {
+  const [showArchive,setShowArchive]=useState(false);
+  const [initialDocument,setInitialDocument]=useState<CatalogueDocument|null>(null);
   const [showCatalogue, setShowCatalogue] = useState(false);
   // Detect if mobile on initial load (lg breakpoint is 1024px in Tailwind)
   const isMobile = window.innerWidth < 1024;
@@ -152,8 +156,10 @@ function App() {
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
-      <button className="fixed top-3 right-3 z-40 bg-gray-700 p-2 rounded" onClick={() => setShowCatalogue(true)}>Documents</button>
-      {showCatalogue && <DocumentCatalogue onClose={() => setShowCatalogue(false)} />}
+      <DatasetBadge />
+      <div className="fixed top-3 right-3 z-40 flex gap-2"><button className="bg-gray-700 p-2 rounded" onClick={()=>setShowArchive(true)}>Archive</button><button className="bg-gray-700 p-2 rounded" onClick={() => {setInitialDocument(null);setShowCatalogue(true);}}>Documents</button></div>
+      {showArchive && <ArchiveCatalogue onClose={()=>setShowArchive(false)} onDocument={d=>{setInitialDocument(d);setShowArchive(false);setShowCatalogue(true);}}/>}
+      {showCatalogue && <DocumentCatalogue initialDocument={initialDocument} onClose={() => setShowCatalogue(false)} />}
       {/* Desktop Sidebar - hidden on mobile */}
       <div className="hidden lg:block">
         <Sidebar

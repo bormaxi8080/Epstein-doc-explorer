@@ -17,6 +17,10 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Added
 
+- Distribution stage 6: complete inventory SQLite/FTS catalogue, bounded folder and
+  source search, explicit text/review coverage, source-to-member document mapping,
+  verified relative release activation/rollback and catalogue disk identity guards.
+
 - Distribution stage 5: local workflow preparation, portable reviewed-source/OCR
   exports and offline pilot adoption with preserved receipts and a fresh audit.
 

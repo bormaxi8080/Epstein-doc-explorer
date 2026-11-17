@@ -11,10 +11,19 @@ from . import __version__
 from .inventory_parts import guard_directory
 
 FORMAT = "epstein-explorer-release"
-GROUPS = ("inventory-full", "inventory-parts", "inventory-db", "baseline", "viewer", "pilot")
+GROUPS = (
+    "inventory-full",
+    "inventory-parts",
+    "inventory-db",
+    "baseline",
+    "viewer",
+    "pilot",
+    "catalogue",
+)
 PROFILES = {
-    "viewer": ("viewer",),
-    "pipeline": ("inventory-parts", "inventory-db"),
+    "viewer": ("viewer", "catalogue"),
+    "catalogue": ("catalogue",),
+    "pipeline": ("inventory-parts", "inventory-db", "catalogue"),
     "inventory-full": ("inventory-full", "inventory-db"),
     "pilot": ("pilot",),
 }

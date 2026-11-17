@@ -52,6 +52,20 @@ def verify_database(path, role, visibility, inventory):
                 != inventory["unique_assets"]
             ):
                 raise ValueError("Producer database asset count mismatch")
+        elif role == "catalog-db":
+            if not {"assets", "nodes", "meta", "assets_fts"} <= tables:
+                raise ValueError("Wrong inventory catalogue database role")
+            meta = {k: json.loads(v) for k, v in db.execute("SELECT key,value FROM meta")}
+            if (
+                meta.get("format") != "explorer-inventory-catalog"
+                or meta.get("version") != 1
+                or meta.get("source_sha256") != inventory["source_sha256"]
+                or meta.get("snapshot_id") != inventory["snapshot_id"]
+                or meta.get("complete") != inventory["complete"]
+                or db.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+                != inventory["unique_assets"]
+            ):
+                raise ValueError("Catalogue inventory binding mismatch")
         elif role in ("viewer-db", "baseline-db"):
             if not {"documents", "rdf_triples"} <= tables:
                 raise ValueError("Wrong Explorer database role")
@@ -79,7 +93,7 @@ def verify_installed(root, release, selected):
     by_role = {}
     for item in selected:
         by_role.setdefault(item["role"], []).append(item)
-        if item["role"] in ("inventory-db", "viewer-db", "baseline-db"):
+        if item["role"] in ("inventory-db", "viewer-db", "baseline-db", "catalog-db"):
             verify_database(
                 safe_path(root, item["install_path"]),
                 item["role"],

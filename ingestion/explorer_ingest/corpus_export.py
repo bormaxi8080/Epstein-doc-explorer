@@ -70,6 +70,10 @@ def export_corpus(corpus, output, clusters_path, base_db=None, include_unreviewe
                 triple_id INTEGER PRIMARY KEY,start INTEGER,end INTEGER,matches INTEGER,offset_unit TEXT);
               CREATE TABLE IF NOT EXISTS ingestion_archive_sources(
                 id TEXT PRIMARY KEY,doc_id TEXT,archive_uuid TEXT,relative_path TEXT,metadata TEXT,receipt TEXT,source_sha256 TEXT);
+              CREATE TABLE IF NOT EXISTS ingestion_asset_documents(
+                url TEXT,doc_id TEXT,source_id TEXT,source_sha256 TEXT,relative_path TEXT,
+                PRIMARY KEY(url,doc_id,source_id));
+              CREATE INDEX IF NOT EXISTS ingestion_asset_url ON ingestion_asset_documents(source_sha256,url,doc_id);
               CREATE TABLE IF NOT EXISTS ingestion_members(
                 parent_id TEXT,name TEXT,doc_id TEXT,sha256 TEXT,bytes INTEGER,depth INTEGER,PRIMARY KEY(parent_id,name));
               CREATE TEMP TABLE seen_triples(key TEXT PRIMARY KEY) WITHOUT ROWID;
@@ -243,6 +247,19 @@ def export_corpus(corpus, output, clusters_path, base_db=None, include_unreviewe
                             source["source_sha256"],
                         ),
                     )
+                    metadata = json.loads(source["metadata"])
+                    url = metadata.get("download_url") or metadata.get("url")
+                    if url:
+                        db.execute(
+                            "INSERT OR IGNORE INTO ingestion_asset_documents VALUES (?,?,?,?,?)",
+                            (
+                                url,
+                                doc["doc_id"],
+                                source["id"],
+                                source["source_sha256"],
+                                source["relative_path"],
+                            ),
+                        )
                 if members:
                     for member in corpus.db.execute(
                         ancestry

@@ -73,4 +73,9 @@ def demo_bundle(output, reserve_bytes=1024**3):
             export_corpus(corpus, output, clusters)
         finally:
             corpus.close()
+    from .state import atomic_json
+
+    meta = json.loads((output / "manifest.json").read_text())
+    meta["synthetic"] = True
+    atomic_json(output / "manifest.json", meta)
     return dict(output=str(output), synthetic=True, documents=1, network_or_model_calls=False)

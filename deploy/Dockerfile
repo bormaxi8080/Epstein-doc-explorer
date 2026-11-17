@@ -17,7 +17,7 @@ WORKDIR /app
 ENV NODE_ENV=production PORT=3001 DB_READONLY=true DB_PATH=/data/current/document_analysis.db TAG_CLUSTERS_PATH=/data/current/tag_clusters.json
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY deploy/viewer/package.json ./package.json
-COPY api_server.ts ./
+COPY api_server.ts api_archive.ts ./
 COPY --from=frontend /ui/dist ./network-ui/dist
 LABEL org.opencontainers.image.title="Epstein Document Explorer Viewer" org.opencontainers.image.licenses="MIT"
 USER node

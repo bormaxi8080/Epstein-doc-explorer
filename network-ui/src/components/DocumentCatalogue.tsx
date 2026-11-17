@@ -3,13 +3,14 @@ import { API_BASE as API } from '../api';
 async function read(url:string,signal?:AbortSignal) {
   const r=await fetch(API+url,{signal});if(!r.ok)throw new Error('Document request failed');return r.json();
 }
-type Doc={doc_id:string;one_sentence_summary:string;category:string;review_status:string};
+export type CatalogueDocument={doc_id:string;one_sentence_summary:string;category:string;review_status:string};
 type Page={page:number;text:string;quality:string;method:string;truncated:boolean};
 type Evidence={triple_id:number;page:number;quote:string;assertion_type:string};
-export function DocumentCatalogue({onClose}:{onClose:()=>void}) {
+type Doc=CatalogueDocument;
+export function DocumentCatalogue({onClose,initialDocument}:{onClose:()=>void;initialDocument?:Doc|null}) {
   const [q,setQ]=useState(''),[submitted,setSubmitted]=useState(''),[after,setAfter]=useState('');
   const [docs,setDocs]=useState<Doc[]>([]),[next,setNext]=useState<string|null>(null);
-  const [selected,setSelected]=useState<Doc|null>(null),[pageAfter,setPageAfter]=useState(0);
+  const [selected,setSelected]=useState<Doc|null>(initialDocument??null),[pageAfter,setPageAfter]=useState(0);
   const [pages,setPages]=useState<Page[]>([]),[pageNext,setPageNext]=useState<number|null>(null);
   const [evidence,setEvidence]=useState<Evidence[]>([]),[evidenceAfter,setEvidenceAfter]=useState(0),[evidenceNext,setEvidenceNext]=useState<number|null>(null);
   const [error,setError]=useState(''),[loading,setLoading]=useState(false);

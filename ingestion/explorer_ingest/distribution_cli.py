@@ -5,6 +5,7 @@ import json
 
 from jsonschema import ValidationError
 
+from .distribution_activate import activate
 from .distribution_contracts import PROFILES, load_workspace
 from .distribution_demo import demo_bundle
 from .distribution_doctor import diagnose
@@ -13,6 +14,7 @@ from .distribution_install import import_release, verify_install
 from .distribution_pilot import export_pilot
 from .distribution_release import build_release, verify_release
 from .distribution_workflow import prepare_workflow
+from .inventory_catalog import build_catalog
 
 
 def parser():
@@ -65,6 +67,16 @@ def parser():
     pilot.add_argument("--corpus", required=True)
     pilot.add_argument("--output", required=True)
     pilot.add_argument("--reserve-bytes", type=int, default=1024**3)
+    catalog = sub.add_parser("build-catalog")
+    source = catalog.add_mutually_exclusive_group(required=True)
+    source.add_argument("--dump")
+    source.add_argument("--manifest")
+    catalog.add_argument("--output", required=True)
+    catalog.add_argument("--reserve-bytes", type=int, default=1024**3)
+    active = sub.add_parser("activate")
+    active.add_argument("--workspace", required=True)
+    active.add_argument("--installation", required=True)
+    active.add_argument("--allow-drafts", action="store_true")
     return p
 
 
@@ -75,7 +87,13 @@ def main(argv=None):
             result = diagnose(args.workspace, args.require_docker, args.component)
             print(json.dumps(result, indent=2))
             return 0 if result["passed"] else 2
-        if args.command == "prepare-workflow":
+        if args.command == "build-catalog":
+            result = build_catalog(
+                args.manifest or args.dump, args.output, bool(args.manifest), args.reserve_bytes
+            )
+        elif args.command == "activate":
+            result = activate(args.workspace, args.installation, args.allow_drafts)
+        elif args.command == "prepare-workflow":
             result = prepare_workflow(
                 args.workspace, args.installation, args.model, args.routing_revision, args.fcc_url
             )

@@ -33,7 +33,7 @@ free reserve are checked. Installation must not initialize or fetch implicitly.
 3. Resumable acquisition/import and Drive file adapter: implemented; real shared-folder validation awaits an operator link.
 4. Native/container installation and read-only doctor: implemented; acceptance records follow below.
 5. Workflow config generation, portable private pilot and fresh-audit adoption: implemented.
-6. Full inventory catalogue integration and release activation: next.
+6. Full inventory catalogue integration and release activation: implemented.
 7. Distribution acceptance tests and real external release: next.
 
 Only verified milestones will be marked implemented. Live downloads/inference and
@@ -115,3 +115,39 @@ for the new local archive before starting OCR. Ready Viewer data is reusable
 without inference; fresh processing intentionally creates local jobs instead of
 copying machine-bound queue state. Original receipt times are historical origin
 evidence; the new bundle-import event records the local adoption separately.
+
+## Full archive catalogue and activation
+
+`explorer-data build-catalog --manifest /external/inventory/manifest.json
+--output /external/inventory.sqlite3` builds a bounded-memory read-only index.
+The original full JSON and partition files remain authoritative and unchanged.
+The index retains every logical node, source occurrence and additional record;
+FTS searches filenames/URLs, not OCR text. SQLite sort scratch stays on the chosen
+external filesystem. Include it as role catalog-db, group catalogue, installed as
+viewer/inventory.sqlite3 beside the Viewer database. Viewer and pipeline profiles
+include catalogue when available. A public starter contains only existing upstream
+text and approved imported text; a private pilot remains visibly pending review.
+
+The Viewer discovers inventory.sqlite3 beside DB_PATH, or accepts an explicit
+INVENTORY_DB_PATH. A missing explicitly configured catalogue fails startup;
+removal/replacement during service returns 503 rather than silently serving stale
+coverage. Archive browsing and searches are cursor-paginated and capped at 100.
+Document/source mappings include ZIP descendants; older small pilot bundles have
+a bounded legacy mapping. No filename-based matching to upstream text is inferred.
+The graph remains a bounded view of published relationships, not a claim that all
+source files have been processed. Media without a supported processor remains
+explicitly unsupported in the processing ledger.
+
+Import a Viewer installation directly under the workspace releases role, then:
+
+```bash
+explorer-data activate --workspace /external/workspace.json --installation /external/releases/RELEASE_ID
+```
+
+This verifies content, bundle pairing and the selected profile before atomically
+switching releases/current to a relative target. Mount the whole releases folder
+at /data in the Viewer and restart after activation. Roll back by activating the
+previous installation. Existing directories/escaping pointers are rejected.
+Private installation/activation requires --allow-drafts; do not expose a private
+pilot as the public default. Original source downloads remain under the downloader
+root; the catalogue provides the official source URL without initiating a download.

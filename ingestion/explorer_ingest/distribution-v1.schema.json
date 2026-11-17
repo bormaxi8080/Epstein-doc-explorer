@@ -96,7 +96,8 @@
               "inventory-db",
               "baseline",
               "viewer",
-              "pilot"
+              "pilot",
+              "catalogue"
             ]
           },
           "role": {

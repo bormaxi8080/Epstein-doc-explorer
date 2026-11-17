@@ -35,6 +35,31 @@ class ExportTests(unittest.TestCase):
             text = "Synthetic Unicode text 😀 with zero relationships"
             select_page(c, doc, 1, text, "native", {})
             assemble_text(c, doc)
+            parent = document_id("d" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes) VALUES (?,?,1)",
+                (parent, "d" * 64),
+            )
+            c.db.execute(
+                "CREATE TABLE corpus_members(parent_id TEXT,name TEXT,doc_id TEXT,path TEXT,sha256 TEXT,bytes INTEGER,depth INTEGER,PRIMARY KEY(parent_id,name))"
+            )
+            c.db.execute(
+                "INSERT INTO corpus_members VALUES (?,?,?,?,?,?,?)",
+                (parent, "nested.txt", doc, "member.txt", "c" * 64, 1, 1),
+            )
+            c.db.execute(
+                "INSERT INTO corpus_sources VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    "source-parent",
+                    parent,
+                    str(root),
+                    "synthetic-archive",
+                    "original.zip",
+                    json.dumps({"download_url": "https://example.invalid/original.zip"}),
+                    "{}",
+                    "a" * 64,
+                ),
+            )
             clusters = root / "clusters.json"
             clusters.write_text(json.dumps([dict(id=0, name="Base", tags=["tag"], exemplars=[])]))
             initialize_tags(c.db, clusters)
@@ -68,6 +93,12 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(digest_file(baseline), sha)
             db = sqlite3.connect(root / "private/document_analysis.db")
             self.assertEqual(db.execute("PRAGMA journal_mode").fetchone()[0], "delete")
+            bridge = db.execute(
+                "SELECT url,doc_id,source_id FROM ingestion_asset_documents"
+            ).fetchall()
+            self.assertEqual(
+                bridge, [("https://example.invalid/original.zip", doc, "source-parent")]
+            )
             full, path = db.execute(
                 "SELECT full_text,file_path FROM documents WHERE doc_id=?", (doc,)
             ).fetchone()
