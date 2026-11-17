@@ -4,6 +4,10 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ## Unreleased
 
+### Fixed
+
+- Remove stray patch markers from the corpus workflow guide.
+
 ### Added
 
 - Verify zero request/image/reasoning/cache prices as well as prompt/completion

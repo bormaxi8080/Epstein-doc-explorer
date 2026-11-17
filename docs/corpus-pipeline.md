@@ -231,19 +231,19 @@ rather than exceeding worker IPC limits. Export preserves archive receipt/member
 lineage even for container wrappers without a text row. API cluster metadata
 comes from SQLite in new bundles, and UI year bounds come from actual data.
 
-+Private quality evaluation may explicitly use `analyze-plan --allow-review` and
-+`synthesize --allow-review`; the resulting manifest keeps review_required and
-+cannot pass public approval. This enables a draft pilot without pretending that
-+photo/blank pages have been manually reviewed. Default analysis still requires
-+accepted pages. For local private bundle inspection, bind the API with
-+`HOST=127.0.0.1`; original payloads are not served by that API.
-+
-+On 2026-11-16 a synthetic million-job benchmark on the external Transcend root
-+scheduled in 13.45 s (74,329 jobs/s), resolved 1,000 jobs in 1.53 s, and peaked at
-+39,043,072 RSS bytes. Before indexed claim selection the 1,000 resolutions took
-+67.76 s. These measurements cover queue persistence only, not OCR throughput or
-+semantic accuracy. No model calls were made by the benchmark.
-+
+Private quality evaluation may explicitly use `analyze-plan --allow-review` and
+`synthesize --allow-review`; the resulting manifest keeps review_required and
+cannot pass public approval. This enables a draft pilot without pretending that
+photo/blank pages have been manually reviewed. Default analysis still requires
+accepted pages. For local private bundle inspection, bind the API with
+`HOST=127.0.0.1`; original payloads are not served by that API.
+
+On 2026-11-16 a synthetic million-job benchmark on the external Transcend root
+scheduled in 13.45 s (74,329 jobs/s), resolved 1,000 jobs in 1.53 s, and peaked at
+39,043,072 RSS bytes. Before indexed claim selection the 1,000 resolutions took
+67.76 s. These measurements cover queue persistence only, not OCR throughput or
+semantic accuracy. No model calls were made by the benchmark.
+
 ## Continuous progression
 
 `work --allow-fcc --limit N` prioritizes downstream ready jobs and incrementally
@@ -256,12 +256,12 @@ jobs; its cursor supports bounded pagination. Free call caps and provider pauses
 still apply to the entire work invocation. Read-only status distinguishes selected
 corpus completion from full_archive_complete and exposes frozen selection scope.
 
-+FCC request_timeout is configurable from 1–300 seconds and max_output_tokens
-+from 128–16,384; defaults remain 120 seconds/8,192 tokens. A timeout has an unknown
-+upstream outcome and pauses the official worker. Do not run parallel custom model
-+drivers against the configured single-slot FCC provider. Changing these request
-+parameters changes the provider/cache identity and requires replanning.
-+
+FCC request_timeout is configurable from 1–300 seconds and max_output_tokens
+from 128–16,384; defaults remain 120 seconds/8,192 tokens. A timeout has an unknown
+upstream outcome and pauses the official worker. Do not run parallel custom model
+drivers against the configured single-slot FCC provider. Changing these request
+parameters changes the provider/cache identity and requires replanning.
+
 `init-tags --clusters tag_clusters.json` pins the review dictionary in corpus
 state. `propose-tag TAG --allow-fcc` and `propose-alias NAME --candidate NAME
 --allow-fcc` create cached proposals only. `review-tag TAG CLUSTER --reason TEXT`
@@ -269,11 +269,11 @@ and `review-alias ORIGINAL CANONICAL --reason TEXT` apply explicit decisions.
 Exports carry those reviewed decisions into the compatible bundle; unknown or
 redacted identities can never be merged by these commands.
 
-+Bundles include per-chunk requested/reported model, prompt, usage, response digest
-+and Unicode page-fragment offsets in ingestion_analysis_chunks. Evidence spans
-+are stored only for unique quote matches; repeated quotes retain a match count
-+and null offsets instead of fabricated coordinates.
-+
+Bundles include per-chunk requested/reported model, prompt, usage, response digest
+and Unicode page-fragment offsets in ingestion_analysis_chunks. Evidence spans
+are stored only for unique quote matches; repeated quotes retain a match count
+and null offsets instead of fabricated coordinates.
+
 ## Real-provider validation feedback
 
 The authorized draft check exposed a timeout, an additional response property,
@@ -284,31 +284,31 @@ one budgeted corrective call for schema/evidence failure. Both answers are kept;
 the correction must pass the same strict validator. A second failure remains
 failed. Network timeouts still pause instead of triggering a corrective call.
 
-+HTTP error diagnostics (bounded body, status, Retry-After) are retained externally
-+when a call recorder is configured. HTTP 429 does not establish a reset time or
-+whether the limit is daily versus transient. The worker pauses; it never rotates
-+providers/accounts to evade it. Export manifests include selected-corpus coverage
-+so a partial private bundle cannot be mistaken for a completed archive.
-+
-+The real baseline contains invalid alias cycles. New corpus exports quarantine
-+each cycle and every chain entering it in ingestion_alias_issues, retaining the
-+complete original row. Such names remain distinct; no canonical identity is
-+chosen automatically. Reviewed new aliases still reject cycles. The source
-+baseline is unchanged, and the manifest reports the quarantined row count.
-+
-+The pinned baseline also has nine RDF rows whose document is absent. Derived
-+bundles retain their full rows in ingestion_baseline_triple_issues and exclude
-+them from the active graph, preserving foreign-key integrity without fabricating
-+document metadata/text. All baseline rows remain either active or in the explicit
-+issue tables; the source file's checksum remains unchanged. Manifests count both
-+forms of baseline quarantine.
-+
-+Corpus setup and all CLI mutation commands scope SQLite temporary work to the
-+external root. Inspection scheduling uses indexed EXISTS rather than a DISTINCT
-+sort. Read-only status streams document/page state counters instead of building
-+large temporary GROUP BY sorts. No inference, initialization or index creation
-+runs in status. Storage guards are admission checks, not OS filesystem quotas.
-+
+HTTP error diagnostics (bounded body, status, Retry-After) are retained externally
+when a call recorder is configured. HTTP 429 does not establish a reset time or
+whether the limit is daily versus transient. The worker pauses; it never rotates
+providers/accounts to evade it. Export manifests include selected-corpus coverage
+so a partial private bundle cannot be mistaken for a completed archive.
+
+The real baseline contains invalid alias cycles. New corpus exports quarantine
+each cycle and every chain entering it in ingestion_alias_issues, retaining the
+complete original row. Such names remain distinct; no canonical identity is
+chosen automatically. Reviewed new aliases still reject cycles. The source
+baseline is unchanged, and the manifest reports the quarantined row count.
+
+The pinned baseline also has nine RDF rows whose document is absent. Derived
+bundles retain their full rows in ingestion_baseline_triple_issues and exclude
+them from the active graph, preserving foreign-key integrity without fabricating
+document metadata/text. All baseline rows remain either active or in the explicit
+issue tables; the source file's checksum remains unchanged. Manifests count both
+forms of baseline quarantine.
+
+Corpus setup and all CLI mutation commands scope SQLite temporary work to the
+external root. Inspection scheduling uses indexed EXISTS rather than a DISTINCT
+sort. Read-only status streams document/page state counters instead of building
+large temporary GROUP BY sorts. No inference, initialization or index creation
+runs in status. Storage guards are admission checks, not OS filesystem quotas.
+
 Known ZIP-based Office extensions remain unsupported documents; their internal
 XML is not misrepresented as page OCR. Generic ZIP archives still expand with
 member provenance and bounds.
