@@ -337,3 +337,26 @@ writable external directory outside immutable releases. The server validates the
 path and pins its device/inode, uses file scratch there, and returns 503 if it
 becomes unavailable. SQLITE_MEMORY_MB permits 64–2048 MiB. An invalid explicit
 path fails startup; it never silently selects the system temporary directory.
+
+
+### Targeted evidence repair (prompt v4)
+
+New plans use `corpus-evidence-4`. A corrective call receives up to 64 diagnostic
+paths/codes plus the preceding answer, bounded to 16,384 UTF-8 bytes. The original
+source remains authoritative: quotes must be exact contiguous substrings,
+including whitespace, and unsupported relationships must be removed. Both
+responses and the corrective prompt digest/version are retained. At most two
+calls are permitted per fragment attempt; a second invalid answer remains failed.
+
+Resume keeps an existing plan's prompt version while text, provider, fragment
+budget and review mode are unchanged. To upgrade one rejected document explicitly:
+
+```bash
+.venv/bin/python scripts/process_corpus.py --config examples/corpus-pilot.json analyze-plan DOC_ID --allow-review --prompt-version corpus-evidence-4
+```
+
+This retires obsolete pending/failed jobs for that document with history. Other
+v3 analyses, queued work and public approvals are preserved. Changing text or
+provider still invalidates affected results. The v3 request/correction wording
+remains supported for existing plans; no paid fallback or weakened validator is
+introduced by this repair path.

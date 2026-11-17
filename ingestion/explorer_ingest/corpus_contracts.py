@@ -10,7 +10,8 @@ from jsonschema import Draft202012Validator
 
 CORPUS_VERSION = 1
 OCR_PROMPT_VERSION = "transcribe-1"
-ANALYSIS_PROMPT_VERSION = "corpus-evidence-3"
+ANALYSIS_PROMPT_VERSION = "corpus-evidence-4"
+SUPPORTED_ANALYSIS_PROMPTS = ("corpus-evidence-3", ANALYSIS_PROMPT_VERSION)
 STAGES = ("inspect", "extract", "render", "ocr", "text", "analyze", "assemble", "tags", "export")
 
 

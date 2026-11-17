@@ -10,7 +10,7 @@ import time
 from logging.handlers import RotatingFileHandler
 
 from .corpus_analysis import analyze_fragment, approve, assemble_analysis, plan_analysis
-from .corpus_contracts import fingerprint
+from .corpus_contracts import SUPPORTED_ANALYSIS_PROMPTS, fingerprint
 from .corpus_export import export_corpus
 from .corpus_extract import extract_page, inspect_document
 from .corpus_fcc import FCCFailure
@@ -248,6 +248,8 @@ def parser():
         cmd.add_argument("doc_id")
         if name in ("text", "analyze-plan", "synthesize"):
             cmd.add_argument("--allow-review", action="store_true")
+        if name == "analyze-plan":
+            cmd.add_argument("--prompt-version", choices=SUPPORTED_ANALYSIS_PROMPTS)
         if name == "synthesize":
             cmd.add_argument("--allow-fcc", action="store_true", required=True)
     retry = sub.add_parser("retry-job")
@@ -343,6 +345,7 @@ def main(argv=None):
                     vars(config.fcc()),
                     config.max_fragment_bytes,
                     args.allow_review,
+                    prompt_version=args.prompt_version,
                 )
             elif args.command == "synthesize":
                 corpus.storage.put("free-route-proof", free_route(config))

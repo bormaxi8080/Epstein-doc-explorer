@@ -3,8 +3,14 @@
 import hashlib
 import json
 
-from .corpus_analysis import ANALYSIS_PROMPT_VERSION, SCHEMA, plan_analysis, setup
-from .corpus_contracts import fingerprint
+from .corpus_analysis import (
+    ANALYSIS_PROMPT_VERSION,
+    SCHEMA,
+    plan_analysis,
+    plan_prompt_version,
+    setup,
+)
+from .corpus_contracts import SUPPORTED_ANALYSIS_PROMPTS, fingerprint
 
 
 def tree_done(corpus, key):
@@ -42,6 +48,15 @@ def advance_document(corpus, config, doc_id, allow_review=False):
         key = fingerprint(["canonical-text-2", doc["sha256"], payload])
         corpus.queue.enqueue(key, "text", payload)
         return 1
+    active = corpus.db.execute(
+        "SELECT value FROM corpus_meta WHERE key=?", ("analysis_plan:" + doc_id,)
+    ).fetchone()
+    # Resume the chosen version; upgrades are explicit per-document plans.
+    prompt_version = (
+        plan_prompt_version(corpus, active[0]) if active else None
+    ) or ANALYSIS_PROMPT_VERSION
+    if prompt_version not in SUPPORTED_ANALYSIS_PROMPTS:
+        prompt_version = ANALYSIS_PROMPT_VERSION
     expected = fingerprint(
         [
             doc_id,
@@ -49,13 +64,10 @@ def advance_document(corpus, config, doc_id, allow_review=False):
             vars(config.fcc()),
             config.max_fragment_bytes,
             SCHEMA,
-            ANALYSIS_PROMPT_VERSION,
+            prompt_version,
             allow_review,
         ]
     )
-    active = corpus.db.execute(
-        "SELECT value FROM corpus_meta WHERE key=?", ("analysis_plan:" + doc_id,)
-    ).fetchone()
     if not active or active[0] != expected:
         plan_analysis(corpus, doc_id, vars(config.fcc()), config.max_fragment_bytes, allow_review)
     plan_id = corpus.db.execute(

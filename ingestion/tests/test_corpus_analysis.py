@@ -233,3 +233,193 @@ class AnalysisTests(unittest.TestCase):
                 "superseded",
             )
             self.assertEqual(c.queue.status()["states"], {"pending": 1, "superseded": 1})
+
+    def test_v4_feedback_identifies_exact_quote_path_and_keeps_whitespace_strict(self):
+        test = self
+        source = "Synthetic A\nstated Synthetic B"
+
+        class FeedbackClient(Client):
+            calls = 0
+
+            def generate(self, prompt):
+                value = Client.generate(self, prompt)
+                if self.calls == 2:
+                    test.assertIn("VALIDATION_FEEDBACK:", prompt)
+                    test.assertIn("PREVIOUS_ANSWER:", prompt)
+                    test.assertIn("quote_exact_substring", prompt)
+                    test.assertIn('["rdf_triples", 0, "evidence", "quote"]', prompt)
+                value["output"]["rdf_triples"] = [
+                    dict(
+                        actor="Synthetic A",
+                        action="stated",
+                        target="Synthetic B",
+                        timestamp=None,
+                        location=None,
+                        tags=[],
+                        explicit_topic="",
+                        assertion_type="document_statement",
+                        evidence={
+                            "page": 1,
+                            "quote": source if self.calls == 2 else source.replace("\n", " "),
+                        },
+                    )
+                ]
+                return value
+
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            doc = document_id("8" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes,text_ref) VALUES (?,?,1,?)",
+                (doc, "8" * 64, json.dumps({"sha256": "text"})),
+            )
+            client = FeedbackClient()
+            payload = dict(
+                doc_id=doc,
+                text_key="text",
+                page=1,
+                start=0,
+                text=source,
+                provider=client.identity(),
+                prompt="corpus-evidence-4",
+            )
+            value = c.storage.get(analyze_fragment(c, payload, client)["reference"])
+            self.assertEqual(value["validation_attempts"], 2)
+            self.assertEqual(value["correction_prompt_version"], "corpus-evidence-4")
+            self.assertEqual(len(value["correction_prompt_sha256"]), 64)
+            rejected = c.storage.get(value["rejected_ref"])
+            self.assertEqual(
+                rejected["feedback"],
+                [dict(error="quote_exact_substring", path=["rdf_triples", 0, "evidence", "quote"])],
+            )
+
+    def test_v4_previous_answer_feedback_has_a_utf8_byte_budget(self):
+        test = self
+
+        class Oversized(Client):
+            calls = 0
+
+            def generate(self, prompt):
+                value = Client.generate(self, prompt)
+                if self.calls == 1:
+                    value["output"]["unexpected_field"] = "😀" * 20000
+                else:
+                    test.assertIn("previous_answer_omitted", prompt)
+                    test.assertIn("schema.additionalProperties", prompt)
+                    test.assertLess(len(prompt.encode("utf-8")), 20000)
+                return value
+
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            doc = document_id("9" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes,text_ref) VALUES (?,?,1,?)",
+                (doc, "9" * 64, json.dumps({"sha256": "text"})),
+            )
+            client = Oversized()
+            payload = dict(
+                doc_id=doc,
+                text_key="text",
+                page=1,
+                start=0,
+                text="Synthetic",
+                provider=client.identity(),
+                prompt="corpus-evidence-4",
+            )
+            self.assertIn("reference", analyze_fragment(c, payload, client))
+            self.assertEqual(client.calls, 2)
+
+    def test_explicit_prompt_upgrade_preserves_other_versions_and_approvals(self):
+        from types import SimpleNamespace
+
+        from explorer_ingest.corpus_analysis import plan_prompt_version
+        from explorer_ingest.corpus_workflow import advance_document
+
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            docs = [document_id(ch * 64) for ch in ("a", "b")]
+            client = Client()
+            for doc, ch in zip(docs, ("a", "b"), strict=True):
+                c.db.execute(
+                    "INSERT INTO corpus_documents(doc_id,sha256,bytes) VALUES (?,?,1)",
+                    (doc, ch * 64),
+                )
+                c.inspected(doc, dict(format="pdf", status="inspected", pages=1))
+                select_page(c, doc, 1, "Synthetic source", "native", {})
+                assemble_text(c, doc)
+                plan_analysis(c, doc, client.identity(), prompt_version="corpus-evidence-3")
+            while job := c.queue.claim("test", "analyze"):
+                value = analyze_fragment(c, json.loads(job["payload"]), client)
+                c.queue.finish(job["id"], job["token"], value)
+            for doc in docs:
+                assemble_analysis(c, doc, client)
+                approve(c, doc)
+            original = dict(c.document(docs[0]))
+            self.assertEqual(
+                c.storage.get(json.loads(original["analysis_ref"]))["analysis_prompt_version"],
+                "corpus-evidence-3",
+            )
+            plan_analysis(c, docs[1], client.identity(), prompt_version="corpus-evidence-4")
+            config = SimpleNamespace(
+                fcc=lambda: SimpleNamespace(model="synthetic"), max_fragment_bytes=12000
+            )
+            before = c.db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+            for doc in docs:
+                advance_document(c, config, doc)
+            self.assertEqual(c.db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0], before)
+            self.assertEqual(c.document(docs[0])["analysis_ref"], original["analysis_ref"])
+            self.assertEqual(c.document(docs[0])["approved_key"], original["approved_key"])
+            self.assertIsNone(c.document(docs[1])["analysis_ref"])
+            for doc, expected in zip(docs, ("corpus-evidence-3", "corpus-evidence-4"), strict=True):
+                plan = c.db.execute(
+                    "SELECT value FROM corpus_meta WHERE key=?", ("analysis_plan:" + doc,)
+                ).fetchone()[0]
+                self.assertEqual(plan_prompt_version(c, plan), expected)
+            config.max_fragment_bytes = 500
+            advance_document(c, config, docs[0])
+            self.assertIsNone(c.document(docs[0])["approved_key"])
+            plan = c.db.execute(
+                "SELECT value FROM corpus_meta WHERE key=?", ("analysis_plan:" + docs[0],)
+            ).fetchone()[0]
+            self.assertEqual(plan_prompt_version(c, plan), "corpus-evidence-4")
+
+    def test_legacy_v3_correction_keeps_its_original_prompt_contract(self):
+        test = self
+
+        class Legacy(Client):
+            calls = 0
+
+            def generate(self, prompt):
+                value = Client.generate(self, prompt)
+                test.assertNotIn("VALIDATION_FEEDBACK:", prompt)
+                test.assertNotIn("contiguous DATA.text", prompt)
+                if self.calls == 1:
+                    value["output"]["extra"] = "synthetic"
+                else:
+                    test.assertIn("CORRECTION:", prompt)
+                return value
+
+        with tempfile.TemporaryDirectory() as d:
+            c = Corpus(d, create=True, limits=CorpusLimits(reserve_bytes=0))
+            self.addCleanup(c.close)
+            doc = document_id("c" * 64)
+            c.db.execute(
+                "INSERT INTO corpus_documents(doc_id,sha256,bytes,text_ref) VALUES (?,?,1,?)",
+                (doc, "c" * 64, json.dumps({"sha256": "text"})),
+            )
+            client = Legacy()
+            payload = dict(
+                doc_id=doc,
+                text_key="text",
+                page=1,
+                start=0,
+                text="Synthetic",
+                provider=client.identity(),
+                prompt="corpus-evidence-3",
+            )
+            value = c.storage.get(analyze_fragment(c, payload, client)["reference"])
+            self.assertEqual(value["correction_prompt_version"], "corpus-evidence-3")
+            self.assertEqual(client.calls, 2)

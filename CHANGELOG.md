@@ -6,6 +6,10 @@ Changes to this fork are recorded here; upstream history remains in Git.
 
 ### Fixed
 
+- Give evidence correction a bounded previous answer and precise invalid-field paths
+  in prompt v4. Pin existing plan versions during resume; explicit per-document
+  upgrades preserve other successful analyses and approvals.
+
 - Remove stray patch markers from the corpus workflow guide.
 
 ### Added
